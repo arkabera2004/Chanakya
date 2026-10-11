@@ -1,0 +1,511 @@
+# Chanakya configuration. Copy to config/chanakya.yaml (`chanakya init` does this).
+# Secrets are NEVER written here — only the names of environment variables.
+# Relative paths are resolved from the project root.
+
+app:
+  timezone: Asia/Kolkata
+  data_dir: ./data
+  database_url: sqlite:///./data/chanakya.db      # production: postgresql+psycopg://user@host/chanakya
+  capabilities_file: ./config/wayam_capabilities.yaml
+  reports_dir: ./data/reports
+  report_retention: 30                             # keep the newest N workbooks
+  inbox_dir: ./data/inbox                          # manual imports + inbox/documents/<Tender ID>/
+  documents_dir: ./data/documents
+  log_format: text                                 # text | json (one object per line for a log collector); env CHANAKYA_LOG_FORMAT overrides
+
+http:
+  # Identify the bot honestly; put a real contact address here before going live.
+  user_agent: "ChanakyaBot/0.1 (Wayam AI procurement monitoring; contact: REPLACE-with-monitored-mailbox)"
+  timeout_s: 30
+  max_retries: 3
+  backoff_base_s: 2
+  min_interval_s: 3          # per-domain politeness delay between requests
+  respect_robots_txt: true   # a disallow marks the source restricted; never bypassed
+  max_download_mb: 25
+  circuit_breaker_failures: 5
+  circuit_breaker_cooldown_s: 3600
+  allowed_domains:           # SSRF allowlist — the client refuses every other host
+    - eprocure.gov.in
+    - etenders.gov.in
+    - defproc.gov.in
+    - pmgsytenders.gov.in
+    - eprocurebhel.co.in
+    - coalindiatenders.nic.in
+    - iocletenders.nic.in
+    - eprocurebel.co.in
+    - eprocuremdl.nic.in
+    - arunachaltenders.gov.in
+    - assamtenders.gov.in
+    - etenders.chd.nic.in
+    - dnhtenders.gov.in
+    - ddtenders.gov.in
+    - govtprocurement.delhi.gov.in
+    - etenders.hry.nic.in
+    - hptenders.gov.in
+    - jktenders.gov.in
+    - jharkhandtenders.gov.in
+    - etenders.kerala.gov.in
+    - tendersutl.gov.in
+    - mptenders.gov.in
+    - manipurtenders.gov.in
+    - meghalayatenders.gov.in
+    - mizoramtenders.gov.in
+    - nagalandtenders.gov.in
+    - tendersodisha.gov.in
+    - pudutenders.gov.in
+    - eproc.punjab.gov.in
+    - eproc.rajasthan.gov.in
+    - sikkimtender.gov.in
+    - tntenders.gov.in
+    - tripuratenders.gov.in
+    - etender.up.nic.in
+    - uktenders.gov.in
+    - wbtenders.gov.in
+    - eprocure.goa.gov.in
+    - tenders.ladakh.gov.in
+
+sources:
+  # Public home-page lists only. The active-tender search on these sites asks for a CAPTCHA and is not submitted.
+  # Maharashtra (mahatenders.gov.in) publishes robots.txt Disallow: / and is not included.
+  # Gujarat nProcure, Karnataka, Andhra Pradesh, Telangana, Bihar and Chhattisgarh are different systems.
+  # GeM bidplus and IREPS disallow automated access. GeM bids are read from the CPPP mirror below.
+  - id: gepnic_arunachal
+    type: gepnic
+    name: Arunachal Pradesh eProcurement (GePNIC)
+    base_url: https://arunachaltenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_assam
+    type: gepnic
+    name: Assam eProcurement (GePNIC)
+    base_url: https://assamtenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_chandigarh
+    type: gepnic
+    name: Chandigarh eProcurement (GePNIC)
+    base_url: https://etenders.chd.nic.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_dnh
+    type: gepnic
+    name: Dadra and Nagar Haveli eProcurement (GePNIC)
+    base_url: https://dnhtenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_daman
+    type: gepnic
+    name: Daman and Diu eProcurement (GePNIC)
+    base_url: https://ddtenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_delhi
+    type: gepnic
+    name: Delhi eProcurement (GePNIC)
+    base_url: https://govtprocurement.delhi.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_haryana
+    type: gepnic
+    name: Haryana eProcurement (GePNIC)
+    base_url: https://etenders.hry.nic.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_hp
+    type: gepnic
+    name: Himachal Pradesh eProcurement (GePNIC)
+    base_url: https://hptenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_jk
+    type: gepnic
+    name: Jammu and Kashmir eProcurement (GePNIC)
+    base_url: https://jktenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_jharkhand
+    type: gepnic
+    name: Jharkhand eProcurement (GePNIC)
+    base_url: https://jharkhandtenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_kerala
+    type: gepnic
+    name: Kerala eProcurement (GePNIC)
+    base_url: https://etenders.kerala.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_lakshadweep
+    type: gepnic
+    name: Lakshadweep eProcurement (GePNIC)
+    base_url: https://tendersutl.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_mp
+    type: gepnic
+    name: Madhya Pradesh eProcurement (GePNIC)
+    base_url: https://mptenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_manipur
+    type: gepnic
+    name: Manipur eProcurement (GePNIC)
+    base_url: https://manipurtenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_meghalaya
+    type: gepnic
+    name: Meghalaya eProcurement (GePNIC)
+    base_url: https://meghalayatenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_mizoram
+    type: gepnic
+    name: Mizoram eProcurement (GePNIC)
+    base_url: https://mizoramtenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_nagaland
+    type: gepnic
+    name: Nagaland eProcurement (GePNIC)
+    base_url: https://nagalandtenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_odisha
+    type: gepnic
+    name: Odisha eProcurement (GePNIC)
+    base_url: https://tendersodisha.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_puducherry
+    type: gepnic
+    name: Puducherry eProcurement (GePNIC)
+    base_url: https://pudutenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_punjab
+    type: gepnic
+    name: Punjab eProcurement (GePNIC)
+    base_url: https://eproc.punjab.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_rajasthan
+    type: gepnic
+    name: Rajasthan eProcurement (GePNIC)
+    base_url: https://eproc.rajasthan.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_sikkim
+    type: gepnic
+    name: Sikkim eProcurement (GePNIC)
+    base_url: https://sikkimtender.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_tn
+    type: gepnic
+    name: Tamil Nadu eProcurement (GePNIC)
+    base_url: https://tntenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_tripura
+    type: gepnic
+    name: Tripura eProcurement (GePNIC)
+    base_url: https://tripuratenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_up
+    type: gepnic
+    name: Uttar Pradesh eProcurement (GePNIC)
+    base_url: https://etender.up.nic.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_uttarakhand
+    type: gepnic
+    name: Uttarakhand eProcurement (GePNIC)
+    base_url: https://uktenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_wb
+    type: gepnic
+    name: West Bengal eProcurement (GePNIC)
+    base_url: https://wbtenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_goa
+    type: gepnic
+    name: Goa eProcurement (GePNIC)
+    base_url: https://eprocure.goa.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_ladakh
+    type: gepnic
+    name: Ladakh eProcurement (GePNIC)
+    base_url: https://tenders.ladakh.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_central
+    type: gepnic
+    name: Central eProcurement (GePNIC)
+    base_url: https://eprocure.gov.in/eprocure/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_etenders
+    type: gepnic
+    name: Central eTenders (GePNIC)
+    base_url: https://etenders.gov.in/eprocure/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_defproc
+    type: gepnic
+    name: Defence eProcurement (GePNIC)
+    base_url: https://defproc.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_pmgsy
+    type: gepnic
+    name: PMGSY eProcurement (GePNIC)
+    base_url: https://pmgsytenders.gov.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_epublish
+    type: gepnic
+    name: Central ePublishing (GePNIC)
+    base_url: https://eprocure.gov.in/epublish/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_bhel
+    type: gepnic
+    name: BHEL eProcurement (GePNIC)
+    base_url: https://eprocurebhel.co.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_coal
+    type: gepnic
+    name: Coal India eProcurement (GePNIC)
+    base_url: https://coalindiatenders.nic.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_iocl
+    type: gepnic
+    name: IOCL eProcurement (GePNIC)
+    base_url: https://iocletenders.nic.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_bel
+    type: gepnic
+    name: BEL eProcurement (GePNIC)
+    base_url: https://eprocurebel.co.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  - id: gepnic_mdl
+    type: gepnic
+    name: Mazagon Dock eProcurement (GePNIC)
+    base_url: https://eprocuremdl.nic.in/nicgep/app
+    fetch_detail: false
+    max_pages: 2
+    verification_status: candidate
+  # CPPP aggregates central tenders, state tenders, and the GeM bid mirror. Lists are public HTML.
+  - id: cppp_central
+    type: cppp
+    name: GeM-CPPP — Central active tenders
+    feed: cpppdata
+    max_pages: 10
+    overlap_hours: 12
+    verification_status: verified_working
+  - id: cppp_states
+    type: cppp
+    name: GeM-CPPP — State active tenders
+    feed: mmpdata
+    max_pages: 10
+    overlap_hours: 12
+    verification_status: candidate
+  - id: cppp_gem
+    type: cppp
+    name: GeM-CPPP — GeM active bids (mirror)
+    feed: gemdata
+    max_pages: 10
+    overlap_hours: 12
+    verification_status: candidate
+  - id: manual_inbox
+    type: manual
+    name: Manual import (CSV/XLSX/YAML)
+    path: ./data/inbox/manual
+    platform_label: Manual import
+    verification_status: verified_working
+
+filtering:
+  skip_expired: true
+  backfill_days: 14          # first scan of a source looks back this far
+  reject_threshold: 0.10
+  candidate_threshold: 0.20
+  strong_threshold: 0.50
+
+semantic:
+  enabled: true
+  backend: lexical           # lexical (free, default) | ollama (local embeddings only)
+  embed_model: embeddinggemma
+  candidate_threshold: 0.12
+
+llm:
+  mode: disabled             # cloud | local | disabled | fake (simulated, for demos/tests)
+  cloud_base_url: https://ollama.com
+  local_base_url: http://localhost:11434
+  api_key_env: OLLAMA_API_KEY
+  fast_model: gpt-oss:20b    # verify names with `chanakya llm check` (cloud names come from /api/tags)
+  deep_model: gpt-oss:120b
+  think: low                 # thinking tokens are billed as output
+  temperature: 0
+  request_timeout_s: 120
+  max_output_tokens_fast: 300
+  max_output_tokens_deep: 1200
+  max_retries: 2
+  send_format_schema: auto   # auto = only for local Ollama (cloud does not support structured outputs)
+  prompt_version: v1
+  triage_band: [0.20, 0.50]  # combined match score range where the cheap model resolves ambiguity
+  deep_min_score: 0.45
+
+budget:
+  max_cost_per_run_usd: 0.50
+  max_cost_per_day_usd: 2.00
+  max_calls_per_run: 60
+  max_input_tokens_per_call: 6000
+  max_documents_per_tender: 3
+  max_pages_per_document: 80
+  max_deep_analyses_per_run: 15
+
+# USD per 1M tokens — Ollama Cloud price list as published on ollama.com/pricing (checked 2026-10-10).
+# Some models are cheaper off-peak (outside 12:00 to 18:00 UTC on weekdays, and weekends); these are standard rates.
+pricing:
+  gpt-oss:20b: {input: 0.07, cached_input: 0.035, output: 0.30}
+  gpt-oss:120b: {input: 0.15, cached_input: 0.014, output: 0.60}
+  gemma4: {input: 0.14, cached_input: 0.05, output: 0.40}
+  nemotron-3-nano: {input: 0.06, output: 0.24}
+  glm-5.3-flash: {input: 0.15, cached_input: 0.03, output: 0.50}
+  deepseek-v4.1-flash: {input: 0.30, cached_input: 0.006, output: 1.20}
+  minimax-m2.7: {input: 0.30, cached_input: 0.06, output: 1.20}
+  mistral-large-3: {input: 0.50, output: 1.50}
+
+scoring:
+  weights: {capability: 35, eligibility: 20, technical: 15, deadline: 10, commercial: 10, strategic: 10}
+  priority_thresholds: {P1: 70, P2: 50, P3: 30}
+  closing_soon_days: 7
+  min_days_to_prepare: 5
+  # Win history (doc 10). Off by default. When true, each OTHER notice from the same buyer that BD
+  # recorded as Won adds bonus_per_win to the strategic component (0 to 1 scale), capped at max_bonus.
+  # The reason is written into the score breakdown. Losses never lower a score.
+  win_history_enabled: false
+  win_history_bonus_per_win: 0.1
+  win_history_max_bonus: 0.2
+
+# `chanakya calibrate`: proposes scoring.weights from BD labels. It never edits this file or any score.
+calibration:
+  min_labels: 100            # no proposal below this many labelled notices
+  min_labels_per_class: 10   # nor below this many relevant, or this many irrelevant
+  l2: 1.0                    # pull toward the current weights; higher = smaller moves
+  cv_folds: 5                # held-out check of the proposal; 0 turns it off
+
+# Wayam's credentials. Unknown values stay null → eligibility is reported as unknown, never assumed.
+# The desk's Company profile page saves to <data_dir>/<this file's name>.profile.yaml, which is laid over
+# this block on every load. This file is never rewritten.
+company_profile:
+  name: Wayam AI
+  annual_turnover_inr_crore: null
+  average_turnover_3y_inr_crore: null
+  years_in_operation: null
+  certifications: []          # e.g. ["ISO 27001", "ISO 9001", "CMMI 3"] — only verified ones
+  msme_registered: null
+  dpiit_startup: null
+  past_government_projects: null
+  cert_in_empanelled: null
+
+email:
+  enabled: false
+  provider: file             # file (writes .eml to outbox — test provider) | smtp
+  smtp_host: ""               # your SMTP relay, e.g. Microsoft 365 or Google Workspace
+  smtp_port: 587
+  smtp_security: starttls
+  username_env: CHANAKYA_SMTP_USERNAME
+  password_env: CHANAKYA_SMTP_PASSWORD
+  sender: chanakya@example.com  # replace with a mailbox your SMTP account may send as
+  to: []                     # or set CHANAKYA_EMAIL_TO="a@x.com,b@y.com"
+  cc: []
+  min_score: 50
+  closing_within_days: null
+  attach_excel: true
+  max_attachment_mb: 10
+  subject_template: "CHANAKYA | Wayam AI Government Opportunities | {date}"
+  outbox_dir: ./data/outbox
+  digest: daily              # daily = a digest for every emailed run | weekly = one digest per week, on schedule.weekly_digest_day
+  alert_on_new_p1: false     # true = on an emailed run, one message listing P1 notices not yet alerted (each notice once)
+  # Follow-up alerts cover notices BD is working on: review status Shortlisted, Reviewing, Qualified,
+  # Partner needed or Pursuing, or priority P1 that BD has not closed out (Rejected, Expired, Won, Lost).
+  alert_on_corrigendum: false  # true = on an emailed run, one message listing material changes to those notices (each change once)
+  corrigendum_alert_window_days: 7  # only changes detected this recently are alerted, so switching it on does not replay history
+  alert_on_deadline: false   # true = on an emailed run, a reminder when one of those notices is close to its closing date
+  deadline_alert_days: [7, 2]  # one reminder per notice at each of these many days before closing; closed or expired notices never
+  max_retries: 3
+
+schedule:
+  daily_at: "07:30"          # IST
+  weekdays_only: false
+  weekly_digest_day: mon
+
+documents:
+  ocr_enabled: false         # requires the 'ocr' extra + tesseract binary
+  ocr_languages: eng         # e.g. eng+hin when Hindi traineddata is installed
+  max_zip_members: 200
+  max_zip_total_mb: 200
+  max_zip_ratio: 100
+  min_chars_per_page: 40
+  tables_enabled: true       # ruled PDF tables (BOQs) are rendered as delimited rows in the page text
+  max_table_rows_per_document: 300   # past this, table pages keep plain text extraction
+
+# Award notices (CPPP "Result of Tenders"). Off by default. Checked 2026-10-10: the page is a search form
+# with an image CAPTCHA and lists nothing until the form is submitted, which Chanakya does not do.
+# The results-table parser is tested against a synthetic fixture only. Real data comes in through
+# `chanakya awards import <saved page or CSV>`. Run `chanakya awards test` before changing the status.
+awards:
+  enabled: false
+  source_id: cppp_awards
+  name: "GeM-CPPP: Results of Tenders (awards)"
+  url: https://eprocure.gov.in/cppp/resultoftendersnew/cpppdata
+  max_pages: 3
+  verification_status: candidate

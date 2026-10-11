@@ -1,0 +1,26 @@
+# Offline demo: synthetic records + simulated AI, no network, no API key.
+#   python scripts/make_demo_data.py
+#   chanakya --config config/chanakya.demo.yaml run --dry-run
+app:
+  database_url: sqlite:///./data/demo/chanakya_demo.db
+  capabilities_file: ./config/wayam_capabilities.yaml
+  reports_dir: ./data/demo/reports
+  inbox_dir: ./data/demo/inbox
+sources:
+  - id: demo
+    type: fixture
+    name: Demo inbox (synthetic)
+    path: ./data/demo/inbox
+    platform_label: Demo (synthetic)
+    verification_status: verified_working
+llm:
+  mode: fake
+pricing:
+  gpt-oss:20b: {input: 0.07, cached_input: 0.035, output: 0.30}
+  gpt-oss:120b: {input: 0.15, cached_input: 0.014, output: 0.60}
+email:
+  enabled: true
+  provider: file
+  to: [bd-demo@example.com]
+  outbox_dir: ./data/demo/outbox
+  min_score: 40

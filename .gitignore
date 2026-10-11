@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+.env
+data/
+web/node_modules/
+web/.next/
+config/chanakya.yaml
+*.xlsx
+!tests/fixtures/**/*.xlsx
+*.eml
+web/tsconfig.tsbuildinfo

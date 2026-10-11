@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC fixture. NOT a capture of any real page. Every tender, organisation,
+  bidder name, date and value below is invented for tests.
+
+  Why synthetic: on 2026-10-10 the real page
+  https://eprocure.gov.in/cppp/resultoftendersnew/cpppdata (fetched through
+  chanakya.http.PoliteClient; robots.txt returned 404) showed only a search form with
+  an image CAPTCHA and no results table (see cppp_results_captcha_form.real.html in
+  this folder). Chanakya does not submit that form, so the layout of a real results
+  page has never been observed.
+
+  What this file ASSUMES about the real results page (unverified):
+  - a server-rendered table in the style of the CPPP active-tender listing, with the
+    same combined "Title/Ref.No./Tender Id" cell;
+  - award columns named "AOC Date", "Name of Selected Bidder" and "Contract Value";
+  - a "Total Tenders : N" line and a pager with a "Next" link;
+  - the search form (with its CAPTCHA) staying on the page above the table.
+  The parser is header-driven, so different column order or missing award columns are
+  tolerated, but nothing here proves the real layout.
+-->
+<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">
+<title>SYNTHETIC | Result of Tenders</title></head>
+<body>
+<form id="resultoftendersnew-form" method="post" action="/cppp/resultoftendersnew/cpppdata">
+  <label>Keyword (Min. 3 Char.)</label><input type="text" name="keyword">
+  <img src="/cppp/image-captcha-generate/0/0" alt="Image CAPTCHA" title="Image CAPTCHA">
+  <label>What code is in the image?</label><input type="text" name="captcha_response">
+</form>
+<p>Total Tenders : 12</p>
+<table id="table" class="list_table">
+<thead><tr>
+  <th>Sl.No</th><th>AOC Date</th><th>e-Published Date</th><th>Title/Ref.No./Tender Id</th>
+  <th>Organisation Name</th><th>Name of Selected Bidder</th><th>Contract Value</th>
+</tr></thead>
+<tbody>
+<tr><td>1.</td><td>08-Oct-2026</td><td>01-Aug-2026 10:00 AM</td>
+  <td><a href="/cppp/aocfullview/SYNTHETIC1">Implementation of AI-based video analytics on existing CCTV cameras for Smart City ICCC</a>/SYN/SC/VA/01/2026_SYNSC_000101_1</td>
+  <td>Synthetic Smart City Ltd</td><td>Synthetic Vision Systems Pvt Ltd</td><td>4,20,00,000.00</td></tr>
+<tr><td>2.</td><td>07-Oct-2026</td><td>20-Jul-2026 11:30 AM</td>
+  <td><a href="/cppp/aocfullview/SYNTHETIC2">Video analytics software for traffic junction cameras with ANPR</a>/SYN/TP/ANPR/07/2026_SYNTP_000207_1</td>
+  <td>Synthetic Traffic Police</td><td>Synthetic Vision Systems Pvt Ltd</td><td>1,85,50,000.00</td></tr>
+<tr><td>3.</td><td>06-Oct-2026</td><td>15-Jul-2026 03:00 PM</td>
+  <td><a href="/cppp/aocfullview/SYNTHETIC3">Speech analytics and quality monitoring for health helpline call centre</a>/SYN/HLT/CALL/03/2026_SYNHLT_000103_1</td>
+  <td>Synthetic Health Department</td><td>Synthetic Voice Labs LLP</td><td>95,00,000.00</td></tr>
+<tr><td>4.</td><td>05-Oct-2026</td><td>10-Jul-2026 09:15 AM</td>
+  <td><a href="/cppp/aocfullview/SYNTHETIC4">Road resurfacing work on sector roads</a>/SYN/PWD/ROAD/02/2026_SYNPWD_000102_1</td>
+  <td>Synthetic PWD</td><td>Synthetic Roads and Infra Ltd</td><td>7,10,00,000.00</td></tr>
+<tr><td>5.</td><td>04-Oct-2026</td><td>05-Jul-2026 05:45 PM</td>
+  <td><a href="/cppp/aocfullview/SYNTHETIC5">AI video analytics for intrusion detection at depot perimeter cameras</a>/SYN/DEP/VA/11/2026_SYNDEP_000311_1</td>
+  <td>Synthetic Metro Rail Corporation</td><td>Synthetic Edge Analytics Pvt Ltd</td><td>NA</td></tr>
+<tr><td>6.</td><td>--</td><td>02-Jul-2026 01:00 PM</td>
+  <td><a href="/cppp/aocfullview/SYNTHETIC6">Catering services for hostel mess</a>/SYN/CAT/06/2026_SYNCAT_000106_1</td>
+  <td>Synthetic University</td><td>Synthetic Caterers</td><td>12,40,000.00</td></tr>
+</tbody>
+</table>
+<ul class="pagination">
+  <li><a href="/cppp/resultoftendersnew/cpppdata?page=1">1</a></li>
+  <li><a href="/cppp/resultoftendersnew/cpppdata?page=2">2</a></li>
+  <li><a href="/cppp/resultoftendersnew/cpppdata?page=2">Next &raquo;</a></li>
+</ul>
+</body></html>

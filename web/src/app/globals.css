@@ -1,0 +1,384 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* =============================================================
+   TAILWIND THEME
+   Semantic tokens (tokens.css) -> Tailwind utilities.
+   Reference tokens are deliberately NOT exposed here: components
+   must not be able to reach for a raw palette value.
+   ============================================================= */
+
+@theme inline {
+  /* ---------- font families ---------- */
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-michroma), var(--font-geist), sans-serif;
+
+  /* ---------- surface ---------- */
+  --color-page: var(--surface-page-background);
+  --color-container: var(--surface-container);
+  --color-raised: var(--surface-raised);
+  --color-raised-2: var(--surface-raised-x2);
+  --color-action: var(--surface-action);
+  --color-scroll-bar: var(--surface-scroll-bar);
+
+  /* ---------- text / icon hierarchy ---------- */
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-tertiary: var(--text-tertiary);
+  --color-quaternary: var(--text-quaternary);
+  --color-on-color: var(--text-on-color);
+
+  /* ---------- accent ---------- */
+  --color-vira: var(--accent-vira);
+  --color-vira-soft: var(--accent-vira-soft);
+
+  /* ---------- stroke ---------- */
+  --color-default: var(--stroke-default);
+  --color-active: var(--stroke-active);
+  --color-muted: var(--stroke-muted);
+  --color-disabled: var(--stroke-disabled);
+  --color-on-color-stroke: var(--stroke-on-color);
+
+  /* ---------- action surfaces ---------- */
+  --color-action-primary: var(--action-primary-default);
+  --color-action-primary-hover: var(--action-primary-hover);
+  --color-action-primary-focused: var(--action-primary-focused);
+  --color-action-primary-disabled: var(--action-primary-disabled);
+  --color-action-primary-content: var(--action-primary-content);
+
+  --color-action-secondary: var(--action-secondary-default);
+  --color-action-secondary-hover: var(--action-secondary-hover);
+  --color-action-secondary-focused: var(--action-secondary-focused);
+  --color-action-secondary-disabled: var(--action-secondary-disabled);
+  --color-action-secondary-content: var(--action-secondary-content);
+
+  --color-action-tertiary: var(--action-tertiary-default);
+  --color-action-tertiary-hover: var(--action-tertiary-hover);
+  --color-action-tertiary-focused: var(--action-tertiary-focused);
+
+  /* ---------- feedback ---------- */
+  --color-success: var(--feedback-success-content);
+  --color-success-icon: var(--feedback-success-icon);
+  --color-success-stroke: var(--feedback-success-stroke);
+  --color-success-surface: var(--feedback-success-background);
+  --color-success-badge: var(--feedback-success-badge);
+
+  --color-info: var(--feedback-info-content);
+  --color-info-icon: var(--feedback-info-icon);
+  --color-info-stroke: var(--feedback-info-stroke);
+  --color-info-surface: var(--feedback-info-background);
+  --color-info-badge: var(--feedback-info-badge);
+
+  --color-neutral: var(--feedback-neutral-content);
+  --color-neutral-icon: var(--feedback-neutral-icon);
+  --color-neutral-stroke: var(--feedback-neutral-stroke);
+  --color-neutral-surface: var(--feedback-neutral-background);
+  --color-neutral-badge: var(--feedback-neutral-badge);
+
+  --color-warning: var(--feedback-warning-content);
+  --color-warning-icon: var(--feedback-warning-icon);
+  --color-warning-stroke: var(--feedback-warning-stroke);
+  --color-warning-surface: var(--feedback-warning-background);
+  --color-warning-badge: var(--feedback-warning-badge);
+
+  --color-error: var(--feedback-error-content);
+  --color-error-icon: var(--feedback-error-icon);
+  --color-error-stroke: var(--feedback-error-stroke);
+  --color-error-surface: var(--feedback-error-background);
+  --color-error-badge: var(--feedback-error-badge);
+
+  --color-badge: var(--feedback-badge-content);
+
+  --color-series-1: var(--analytics-series-1);
+  --color-series-2: var(--analytics-series-2);
+  --color-series-3: var(--analytics-series-3);
+  --color-series-4: var(--analytics-series-4);
+  --color-series-5: var(--analytics-series-5);
+  --color-series-6: var(--analytics-series-6);
+
+  /* =========================================================
+     TYPE SCALE - MICHROMA (display)
+     Always weight 400; the face carries its own identity.
+     ========================================================= */
+  --text-display-6xl: 64px;
+  --text-display-6xl--line-height: 1.05;
+  --text-display-6xl--letter-spacing: -0.03em;
+  --text-display-6xl--font-weight: 400;
+
+  --text-display-5xl: 52px;
+  --text-display-5xl--line-height: 1.08;
+  --text-display-5xl--letter-spacing: -0.03em;
+  --text-display-5xl--font-weight: 400;
+
+  --text-display-4xl: 42px;
+  --text-display-4xl--line-height: 1.1;
+  --text-display-4xl--letter-spacing: -0.03em;
+  --text-display-4xl--font-weight: 400;
+
+  --text-display-3xl: 34px;
+  --text-display-3xl--line-height: 1.12;
+  --text-display-3xl--letter-spacing: -0.02em;
+  --text-display-3xl--font-weight: 400;
+
+  --text-display-2xl: 28px;
+  --text-display-2xl--line-height: 1.15;
+  --text-display-2xl--letter-spacing: -0.02em;
+  --text-display-2xl--font-weight: 400;
+
+  --text-display-xl: 22px;
+  --text-display-xl--line-height: 1.2;
+  --text-display-xl--letter-spacing: -0.01em;
+  --text-display-xl--font-weight: 400;
+
+  --text-display-lg: 18px;
+  --text-display-lg--line-height: 1.25;
+  --text-display-lg--letter-spacing: -0.01em;
+  --text-display-lg--font-weight: 400;
+
+  --text-display-base: 14px;
+  --text-display-base--line-height: 1.4;
+  --text-display-base--letter-spacing: -0.01em;
+  --text-display-base--font-weight: 400;
+
+  /* =========================================================
+     TYPE SCALE - GEIST (functional UI)
+     Overrides Tailwind defaults so the raw scale matches spec.
+     ========================================================= */
+  --text-5xl: 48px;
+  --text-5xl--line-height: 52px;
+  --text-5xl--letter-spacing: -0.01em;
+
+  --text-4xl: 40px;
+  --text-4xl--line-height: 44px;
+  --text-4xl--letter-spacing: -0.01em;
+
+  --text-3xl: 32px;
+  --text-3xl--line-height: 38px;
+  --text-3xl--letter-spacing: -0.01em;
+
+  --text-2xl: 24px;
+  --text-2xl--line-height: 30px;
+  --text-2xl--letter-spacing: -0.01em;
+
+  --text-xl: 20px;
+  --text-xl--line-height: 26px;
+  --text-xl--letter-spacing: -0.01em;
+
+  --text-lg: 18px;
+  --text-lg--line-height: 24px;
+  --text-lg--letter-spacing: -0.01em;
+
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-base--letter-spacing: -0.01em;
+
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-sm--letter-spacing: -0.01em;
+
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-xs--letter-spacing: 0em;
+
+  /* =========================================================
+     APPLICATION TYPE TOKENS
+     Named by role, not by size, so components never pick a
+     number. Font family still comes from font-display/font-sans.
+     ========================================================= */
+  --text-display-page: 34px;
+  --text-display-page--line-height: 1.1;
+  --text-display-page--letter-spacing: -0.02em;
+  --text-display-page--font-weight: 400;
+
+  --text-display-metric: 40px;
+  --text-display-metric--line-height: 1.05;
+  --text-display-metric--letter-spacing: -0.03em;
+  --text-display-metric--font-weight: 400;
+
+  --text-display-metric-xl: 56px;
+  --text-display-metric-xl--line-height: 1;
+  --text-display-metric-xl--letter-spacing: -0.03em;
+  --text-display-metric-xl--font-weight: 400;
+
+  --text-heading-lg: 24px;
+  --text-heading-lg--line-height: 30px;
+  --text-heading-lg--letter-spacing: -0.01em;
+  --text-heading-lg--font-weight: 600;
+
+  --text-heading-md: 18px;
+  --text-heading-md--line-height: 24px;
+  --text-heading-md--letter-spacing: -0.01em;
+  --text-heading-md--font-weight: 600;
+
+  --text-heading-sm: 16px;
+  --text-heading-sm--line-height: 22px;
+  --text-heading-sm--letter-spacing: -0.01em;
+  --text-heading-sm--font-weight: 600;
+
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-lg--letter-spacing: -0.01em;
+  --text-body-lg--font-weight: 400;
+
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-md--letter-spacing: -0.01em;
+  --text-body-md--font-weight: 400;
+
+  --text-body-sm: 12px;
+  --text-body-sm--line-height: 16px;
+  --text-body-sm--letter-spacing: -0.01em;
+  --text-body-sm--font-weight: 400;
+
+  --text-label-md: 14px;
+  --text-label-md--line-height: 20px;
+  --text-label-md--letter-spacing: 0em;
+  --text-label-md--font-weight: 500;
+
+  --text-label-sm: 12px;
+  --text-label-sm--line-height: 16px;
+  --text-label-sm--letter-spacing: 0em;
+  --text-label-sm--font-weight: 500;
+
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--letter-spacing: 0em;
+  --text-caption--font-weight: 500;
+}
+
+/* =============================================================
+   ICON UTILITIES
+   Lucide renders with currentColor, so these are colour
+   utilities named for their role in the icon hierarchy.
+   ============================================================= */
+
+@utility icon-primary {
+  color: var(--icon-primary);
+}
+@utility icon-secondary {
+  color: var(--icon-secondary);
+}
+@utility icon-tertiary {
+  color: var(--icon-tertiary);
+}
+@utility icon-quaternary {
+  color: var(--icon-quaternary);
+}
+@utility icon-on-color {
+  color: var(--icon-on-color);
+}
+
+/* Telemetry figures line up column-to-column. */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* =============================================================
+   BASE
+   ============================================================= */
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--surface-page-background);
+  color: var(--text-secondary);
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--stroke-active);
+  color: var(--text-primary);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-scroll-bar) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-scroll-bar);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* =============================================================
+   INTERACTION
+   ============================================================= */
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-vira);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+:where(a, button, input, select, textarea) {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+}
+
+/* The warm light behind Vira on the desk. */
+@utility vira-glow {
+  background-image: radial-gradient(60% 120% at 0% 0%, var(--accent-vira-glow), transparent 70%);
+}
+
+/* A new line in the pass narration settles in. */
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility settle {
+  animation: settle 240ms ease-out both;
+}
+
+/* The step Vira is on. */
+@keyframes beat {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-vira-glow);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@utility beat {
+  animation: beat 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,349 @@
+/* =============================================================
+   DESIGN TOKENS
+
+   TIER 1  reference  - raw values, never consumed by components
+   TIER 2  semantic   - intent, exposed to Tailwind as utilities
+   ============================================================= */
+
+:root {
+  /* -----------------------------------------------------------
+     TIER 1 - REFERENCE
+     ----------------------------------------------------------- */
+
+  --ref-white: #ffffff;
+  --ref-black: #000000;
+
+  /* Gray (extended granularity) */
+  --ref-gray-50: #fafafa;
+  --ref-gray-100: #f2f2f2;
+  --ref-gray-200: #e5e5e5;
+  --ref-gray-300: #d4d4d4;
+  --ref-gray-400: #afafaf;
+  --ref-gray-500: #8a8a8a;
+  --ref-gray-550: #737373;
+  --ref-gray-600: #626262;
+  --ref-gray-650: #525252;
+  --ref-gray-700: #464646;
+  --ref-gray-750: #3b3b3b;
+  --ref-gray-800: #323232;
+  --ref-gray-825: #2a2a2a;
+  --ref-gray-850: #232323;
+  --ref-gray-900: #191919;
+  --ref-gray-950: #101010;
+
+  /* Red */
+  --ref-red-50: #fff1f2;
+  --ref-red-100: #ffe0e2;
+  --ref-red-200: #ffc2c5;
+  --ref-red-300: #ff969b;
+  --ref-red-400: #ff646b;
+  --ref-red-500: #ff4149;
+  --ref-red-600: #e9343c;
+  --ref-red-700: #c62830;
+  --ref-red-800: #a62329;
+  --ref-red-900: #891f24;
+  --ref-red-950: #4b0d10;
+
+  /* Purple */
+  --ref-purple-50: #f8f0ff;
+  --ref-purple-100: #eedbff;
+  --ref-purple-200: #dcb8f5;
+  --ref-purple-300: #ca8deb;
+  --ref-purple-400: #b65bd8;
+  --ref-purple-500: #9f35be;
+  --ref-purple-600: #862aa3;
+  --ref-purple-700: #6f2589;
+  --ref-purple-800: #5b2170;
+  --ref-purple-900: #481b59;
+  --ref-purple-950: #2b0e36;
+
+  /* Blue */
+  --ref-blue-50: #eef8ff;
+  --ref-blue-100: #d8efff;
+  --ref-blue-200: #b7e1fa;
+  --ref-blue-300: #88cef4;
+  --ref-blue-400: #55b4eb;
+  --ref-blue-500: #2c96db;
+  --ref-blue-600: #2179be;
+  --ref-blue-700: #1e61a0;
+  --ref-blue-800: #1c5083;
+  --ref-blue-900: #19436d;
+  --ref-blue-950: #0e2948;
+
+  /* Cyan */
+  --ref-cyan-50: #ecfcff;
+  --ref-cyan-100: #d0f7fc;
+  --ref-cyan-200: #a7eef6;
+  --ref-cyan-300: #70e0ec;
+  --ref-cyan-400: #39cadc;
+  --ref-cyan-500: #17aec4;
+  --ref-cyan-600: #138da3;
+  --ref-cyan-700: #157287;
+  --ref-cyan-800: #175c6d;
+  --ref-cyan-900: #164c5b;
+  --ref-cyan-950: #082f3a;
+
+  /* Teal */
+  --ref-teal-50: #ecfdfb;
+  --ref-teal-100: #d0f8f3;
+  --ref-teal-200: #a5ede5;
+  --ref-teal-300: #71ddd2;
+  --ref-teal-400: #43c7bc;
+  --ref-teal-500: #25aaa0;
+  --ref-teal-600: #208a84;
+  --ref-teal-700: #1f706c;
+  --ref-teal-800: #205a58;
+  --ref-teal-900: #1e4a49;
+  --ref-teal-950: #0d2d2d;
+
+  /* Green */
+  --ref-green-50: #effbf3;
+  --ref-green-100: #dcf5e5;
+  --ref-green-200: #bceacb;
+  --ref-green-300: #8ed8a9;
+  --ref-green-400: #62c487;
+  --ref-green-500: #3fae69;
+  --ref-green-600: #318c54;
+  --ref-green-700: #2b7046;
+  --ref-green-800: #275a3b;
+  --ref-green-900: #224a32;
+  --ref-green-950: #10291b;
+
+  /* Yellow */
+  --ref-yellow-50: #fffceb;
+  --ref-yellow-100: #fff7c6;
+  --ref-yellow-200: #ffed88;
+  --ref-yellow-300: #ffdf4d;
+  --ref-yellow-400: #ffd22d;
+  --ref-yellow-500: #f7bc0b;
+  --ref-yellow-600: #d99506;
+  --ref-yellow-700: #ad6b08;
+  --ref-yellow-800: #8e530d;
+  --ref-yellow-900: #764411;
+  --ref-yellow-950: #442304;
+
+  /* Amber */
+  --ref-amber-50: #fff9eb;
+  --ref-amber-100: #ffedbd;
+  --ref-amber-200: #ffdd82;
+  --ref-amber-300: #ffc94d;
+  --ref-amber-400: #ffb72a;
+  --ref-amber-500: #f59a0b;
+  --ref-amber-600: #d57806;
+  --ref-amber-700: #ac550a;
+  --ref-amber-800: #8a430f;
+  --ref-amber-900: #713810;
+  --ref-amber-950: #421c05;
+
+  /* Orange */
+  --ref-orange-50: #fff6ed;
+  --ref-orange-100: #ffe8ce;
+  --ref-orange-200: #ffd09e;
+  --ref-orange-300: #ffb365;
+  --ref-orange-400: #ff963d;
+  --ref-orange-500: #ff7b1c;
+  --ref-orange-600: #e95d0f;
+  --ref-orange-700: #c1460f;
+  --ref-orange-800: #9a3814;
+  --ref-orange-900: #7c3014;
+  --ref-orange-950: #431507;
+
+  /* Deep Orange */
+  --ref-deep-orange-50: #fff2ef;
+  --ref-deep-orange-100: #ffddd5;
+  --ref-deep-orange-200: #ffb8a7;
+  --ref-deep-orange-300: #ff8f74;
+  --ref-deep-orange-400: #ff6948;
+  --ref-deep-orange-500: #ff4c28;
+  --ref-deep-orange-600: #ed3516;
+  --ref-deep-orange-700: #c72911;
+  --ref-deep-orange-800: #a12413;
+  --ref-deep-orange-900: #841f14;
+  --ref-deep-orange-950: #480d07;
+
+  /* -----------------------------------------------------------
+     TIER 2 - SEMANTIC (light is default on :root)
+     ----------------------------------------------------------- */
+
+  /* surface */
+  --surface-page-background: var(--ref-gray-100);
+  --surface-container: var(--ref-white);
+  --surface-raised: var(--ref-gray-50);
+  --surface-raised-x2: var(--ref-gray-100);
+  --surface-action: var(--ref-gray-100);
+  --surface-scroll-bar: var(--ref-gray-300);
+
+  /* text */
+  --text-primary: var(--ref-gray-950);
+  --text-secondary: var(--ref-gray-700);
+  --text-tertiary: var(--ref-gray-550);
+  --text-quaternary: var(--ref-gray-500);
+  --text-on-color: var(--ref-white);
+
+  /* icon */
+  --icon-primary: var(--ref-gray-950);
+  --icon-secondary: var(--ref-gray-700);
+  --icon-tertiary: var(--ref-gray-550);
+  --icon-quaternary: var(--ref-gray-500);
+  --icon-on-color: var(--ref-white);
+
+  /* accent - Vira. The only brand colour on the desk; the orb's mid tone. */
+  --accent-vira: var(--ref-orange-600);
+  --accent-vira-soft: rgba(240, 115, 26, 0.1);
+  --accent-vira-glow: rgba(240, 115, 26, 0.16);
+
+  /* stroke */
+  --stroke-default: rgba(0, 0, 0, 0.14);
+  --stroke-active: rgba(0, 0, 0, 0.24);
+  --stroke-muted: rgba(0, 0, 0, 0.08);
+  --stroke-disabled: rgba(0, 0, 0, 0.04);
+  --stroke-on-color: rgba(255, 255, 255, 0.18);
+
+  /* action surface - primary */
+  --action-primary-default: var(--ref-gray-950);
+  --action-primary-hover: var(--ref-gray-850);
+  --action-primary-focused: var(--ref-black);
+  --action-primary-disabled: var(--ref-gray-300);
+  --action-primary-content: var(--ref-white);
+
+  /* action surface - secondary */
+  --action-secondary-default: var(--ref-gray-100);
+  --action-secondary-hover: var(--ref-gray-200);
+  --action-secondary-focused: var(--ref-gray-300);
+  --action-secondary-disabled: var(--ref-gray-50);
+  --action-secondary-content: var(--text-primary);
+
+  /* action surface - tertiary */
+  --action-tertiary-default: transparent;
+  --action-tertiary-hover: rgba(0, 0, 0, 0.06);
+  --action-tertiary-focused: rgba(0, 0, 0, 0.1);
+  --action-tertiary-disabled: transparent;
+  --action-tertiary-content: var(--text-secondary);
+
+  /* feedback - success */
+  --feedback-success-content: var(--ref-green-700);
+  --feedback-success-icon: var(--ref-green-600);
+  --feedback-success-stroke: var(--ref-green-300);
+  --feedback-success-background: rgba(63, 174, 105, 0.12);
+  --feedback-success-badge: var(--ref-green-700);
+
+  /* feedback - info */
+  --feedback-info-content: var(--ref-blue-700);
+  --feedback-info-icon: var(--ref-blue-600);
+  --feedback-info-stroke: var(--ref-blue-300);
+  --feedback-info-background: rgba(44, 150, 219, 0.12);
+  --feedback-info-badge: var(--ref-blue-700);
+
+  /* feedback - neutral */
+  --feedback-neutral-content: var(--ref-gray-700);
+  --feedback-neutral-icon: var(--ref-gray-600);
+  --feedback-neutral-stroke: var(--ref-gray-300);
+  --feedback-neutral-background: rgba(0, 0, 0, 0.06);
+  --feedback-neutral-badge: var(--ref-gray-700);
+
+  /* feedback - warning */
+  --feedback-warning-content: var(--ref-orange-700);
+  --feedback-warning-icon: var(--ref-orange-600);
+  --feedback-warning-stroke: var(--ref-orange-300);
+  --feedback-warning-background: rgba(255, 123, 28, 0.12);
+  --feedback-warning-badge: var(--ref-orange-700);
+
+  /* feedback - error */
+  --feedback-error-content: var(--ref-red-700);
+  --feedback-error-icon: var(--ref-red-600);
+  --feedback-error-stroke: var(--ref-red-300);
+  --feedback-error-background: rgba(255, 65, 73, 0.12);
+  --feedback-error-badge: var(--ref-red-700);
+
+  /* Badge label is always white against the solid fills above. */
+  --feedback-badge-content: var(--ref-white);
+
+  /* Analytics series charts only, still semantic (no component hex). */
+  --analytics-series-1: var(--feedback-info-icon);
+  --analytics-series-2: var(--feedback-success-icon);
+  --analytics-series-3: var(--feedback-warning-icon);
+  --analytics-series-4: var(--feedback-error-icon);
+  --analytics-series-5: var(--feedback-neutral-icon);
+  --analytics-series-6: var(--ref-purple-600);
+}
+
+/* -------------------------------------------------------------
+   DARK THEME — applied via data-theme on <html>.
+   ------------------------------------------------------------- */
+
+[data-theme="dark"] {
+  --surface-page-background: var(--ref-black);
+  --surface-container: var(--ref-gray-950);
+  --surface-raised: var(--ref-gray-900);
+  --surface-raised-x2: var(--ref-gray-850);
+  --surface-action: var(--ref-gray-900);
+  --surface-scroll-bar: var(--ref-gray-750);
+
+  --text-primary: var(--ref-gray-50);
+  --text-secondary: var(--ref-gray-300);
+  --text-tertiary: var(--ref-gray-500);
+  --text-quaternary: var(--ref-gray-600);
+  --text-on-color: var(--ref-black);
+
+  --icon-primary: var(--ref-gray-50);
+  --icon-secondary: var(--ref-gray-300);
+  --icon-tertiary: var(--ref-gray-500);
+  --icon-quaternary: var(--ref-gray-600);
+  --icon-on-color: var(--ref-black);
+
+  --accent-vira: #f0731a;
+  --accent-vira-soft: rgba(240, 115, 26, 0.12);
+  --accent-vira-glow: rgba(240, 115, 26, 0.2);
+
+  --stroke-default: rgba(255, 255, 255, 0.14);
+  --stroke-active: rgba(255, 255, 255, 0.24);
+  --stroke-muted: rgba(255, 255, 255, 0.08);
+  --stroke-disabled: rgba(255, 255, 255, 0.04);
+  --stroke-on-color: rgba(0, 0, 0, 0.18);
+
+  --action-primary-default: var(--ref-gray-50);
+  --action-primary-hover: var(--ref-gray-200);
+  --action-primary-focused: var(--ref-white);
+  --action-primary-disabled: var(--ref-gray-700);
+  --action-primary-content: var(--ref-black);
+
+  --action-secondary-default: var(--ref-gray-850);
+  --action-secondary-hover: var(--ref-gray-800);
+  --action-secondary-focused: var(--ref-gray-750);
+  --action-secondary-disabled: var(--ref-gray-950);
+
+  --action-tertiary-hover: rgba(255, 255, 255, 0.06);
+  --action-tertiary-focused: rgba(255, 255, 255, 0.1);
+
+  --feedback-success-content: var(--ref-green-300);
+  --feedback-success-icon: var(--ref-green-400);
+  --feedback-success-stroke: var(--ref-green-700);
+  --feedback-success-background: rgba(63, 174, 105, 0.12);
+  --feedback-success-badge: var(--ref-green-800);
+
+  --feedback-info-content: var(--ref-blue-300);
+  --feedback-info-icon: var(--ref-blue-400);
+  --feedback-info-stroke: var(--ref-blue-700);
+  --feedback-info-background: rgba(44, 150, 219, 0.12);
+  --feedback-info-badge: var(--ref-blue-800);
+
+  --feedback-neutral-content: var(--ref-gray-300);
+  --feedback-neutral-icon: var(--ref-gray-400);
+  --feedback-neutral-stroke: var(--ref-gray-650);
+  --feedback-neutral-background: rgba(255, 255, 255, 0.06);
+  --feedback-neutral-badge: var(--ref-gray-700);
+
+  --feedback-warning-content: var(--ref-orange-300);
+  --feedback-warning-icon: var(--ref-orange-400);
+  --feedback-warning-stroke: var(--ref-orange-700);
+  --feedback-warning-background: rgba(255, 123, 28, 0.12);
+  --feedback-warning-badge: var(--ref-orange-800);
+
+  --feedback-error-content: var(--ref-red-300);
+  --feedback-error-icon: var(--ref-red-400);
+  --feedback-error-stroke: var(--ref-red-700);
+  --feedback-error-background: rgba(255, 65, 73, 0.12);
+  --feedback-error-badge: var(--ref-red-800);
+
+  --analytics-series-6: var(--ref-purple-400);
+}

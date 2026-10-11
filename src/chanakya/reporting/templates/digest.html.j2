@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ subject }}</title></head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:Segoe UI,Arial,sans-serif;color:#1d2733;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;">
+<tr><td align="center" style="padding:20px 10px;">
+<table role="presentation" width="680" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:6px;">
+  <tr><td style="padding:20px 24px;background:#1f3a5f;color:#ffffff;border-radius:6px 6px 0 0;">
+    <div style="font-size:12px;letter-spacing:1px;opacity:.85;">CHANAKYA · WAYAM AI</div>
+    <div style="font-size:20px;font-weight:600;margin-top:4px;">Government opportunities, {{ date }}</div>
+    {% if dry_run %}<div style="margin-top:6px;font-size:12px;background:#9c0006;display:inline-block;padding:2px 6px;">DRY RUN, not sent</div>{% endif %}
+  </td></tr>
+  <tr><td style="padding:16px 24px;font-size:14px;line-height:1.5;">
+    <b>{{ stats.new }}</b> new and <b>{{ stats.updated }}</b> updated notices {{ period }} ·
+    <b>{{ counts.p1 }}</b> high priority (P1) · <b>{{ counts.p2 }}</b> worth investigating (P2) ·
+    <b>{{ counts.closing_soon }}</b> closing within {{ closing_days }} days.
+    {% if coverage_notes %}<div style="margin-top:8px;font-size:12px;color:#9c5700;">Coverage: {{ coverage_notes|join('; ') }}</div>{% endif %}
+  </td></tr>
+  {% for o in items %}
+  <tr><td style="padding:10px 24px;border-top:1px solid #e5e9ee;">
+    <div style="font-size:12px;color:#5b6b7c;">{{ o.priority }} · score {{ o.score }} · {{ o.platform }}{% if o.is_new %} · <b style="color:#1f7a3a;">NEW</b>{% endif %}</div>
+    <div style="font-size:15px;font-weight:600;margin:2px 0;">{{ o.title }}</div>
+    <div style="font-size:13px;">{{ o.organisation }}{% if o.department %}, {{ o.department }}{% endif %}</div>
+    <div style="font-size:13px;margin-top:4px;">Tender ID: <b>{{ o.tender_id }}</b> · Closes: <b>{{ o.closing }}</b></div>
+    <div style="font-size:13px;margin-top:4px;">Wayam fit: {{ o.solution }}</div>
+    <div style="font-size:13px;margin-top:4px;">Eligibility: {{ o.eligibility }}{% if o.concerns %}. {{ o.concerns }}{% endif %}</div>
+    {% if o.flags %}<div style="font-size:12px;margin-top:4px;color:#9c0006;">{{ o.flags|join(' · ') }}</div>{% endif %}
+    <div style="font-size:13px;margin-top:4px;">Next: {{ o.next_action }}</div>
+    {% if o.url %}<div style="font-size:13px;margin-top:4px;"><a href="{{ o.url }}" style="color:#0563c1;">Official listing</a> (search by Tender ID)</div>{% endif %}
+  </td></tr>
+  {% else %}
+  <tr><td style="padding:16px 24px;font-size:14px;">No opportunities met the reporting threshold (score ≥ {{ min_score }}) this time.</td></tr>
+  {% endfor %}
+  <tr><td style="padding:14px 24px;font-size:11px;color:#5b6b7c;border-top:1px solid #e5e9ee;">
+    Scores are decision support only. Eligibility is not assumed when Wayam's credentials could not be verified.
+    Always confirm dates and requirements on the official portal. AI usage this run: {{ ai.calls }} calls,
+    est. ${{ '%.4f'|format(ai.cost) }} ({{ ai.mode }}).{% if attached %} Full workbook attached.{% endif %}
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>

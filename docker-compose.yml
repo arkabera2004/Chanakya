@@ -1,0 +1,70 @@
+# Usage
+#   cp .env.example .env && cp config/chanakya.example.yaml config/chanakya.yaml   # then edit
+#   docker compose run --rm chanakya run --dry-run        # one-off run, no email
+#   docker compose up -d scheduler                         # daily run at schedule.daily_at (IST)
+#   docker compose --profile local-llm up -d ollama        # optional local Ollama (llm.mode: local)
+#   docker compose --profile postgres up -d postgres       # optional PostgreSQL
+#
+# PostgreSQL (docs/18_DEPLOYMENT_AND_CICD.md, "PostgreSQL"): set in .env
+#   INSTALL_POSTGRES=true, POSTGRES_PASSWORD=..., CHANAKYA_DATABASE_URL=postgresql+psycopg://chanakya:<password>@postgres:5432/chanakya
+# then
+#   docker compose build
+#   docker compose --profile postgres up -d postgres
+#   docker compose run --rm chanakya db upgrade            # build or migrate the schema, before any run
+services:
+  chanakya:
+    build: &build
+      context: .
+      args:
+        INSTALL_POSTGRES: ${INSTALL_POSTGRES:-false}
+    image: chanakya:latest
+    env_file: .env
+    environment:
+      CHANAKYA_CONFIG: /app/config/chanakya.yaml
+    volumes:
+      - ./config:/app/config:ro
+      - chanakya-data:/app/data
+    profiles: ["cli"]
+
+  scheduler:
+    build: *build
+    image: chanakya:latest
+    env_file: .env
+    environment:
+      CHANAKYA_CONFIG: /app/config/chanakya.yaml
+    command: ["schedule", "--email"]
+    volumes:
+      - ./config:/app/config:ro
+      - chanakya-data:/app/data
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: chanakya
+      POSTGRES_USER: chanakya
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Bytewise text ordering and ASCII-only case folding, the same as SQLite. Applies when the volume is first created.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chanakya"]
+      interval: 30s
+    restart: unless-stopped
+
+volumes:
+  chanakya-data:
+  ollama-models:
+  pg-data:
