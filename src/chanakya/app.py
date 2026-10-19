@@ -97,6 +97,9 @@ def run_pipeline(settings: Settings, session: Session, *, source_ids: list[str] 
             on_event(stamped)
 
     pipe.on_event = listener
+    if not skip_assess and only_ids is None and assess_scope == "changed":
+        # Assess as the lists are read: a listing that takes an hour must not leave the book unscored.
+        pipe.checkpoint = lambda: pipe.assess_stored(run, stats)
     stopped = False
     try:
         if not skip_scan:

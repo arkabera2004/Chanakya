@@ -90,6 +90,9 @@ class SemanticSettings(_Strict):
     backend: Literal["lexical", "ollama"] = "lexical"
     embed_model: str = "embeddinggemma"
     candidate_threshold: float = 0.12
+    # Bar for a notice whose only rule evidence is weak context words (safety, plant, equipment):
+    # no technology signal, no technology category, no EOI/RFP type.
+    weak_only_threshold: float = 0.15
 
 
 class LLMSettings(_Strict):
@@ -106,7 +109,7 @@ class LLMSettings(_Strict):
     max_output_tokens_deep: int = 1200
     max_retries: int = 2
     send_format_schema: Literal["auto", "always", "never"] = "auto"
-    prompt_version: str = "v1"
+    prompt_version: str = "v2"
     triage_band: tuple[float, float] = (0.20, 0.50)
     deep_min_score: float = 0.45
 
@@ -114,7 +117,7 @@ class LLMSettings(_Strict):
 class BudgetSettings(_Strict):
     max_cost_per_run_usd: float = 0.50
     max_cost_per_day_usd: float = 2.00
-    max_calls_per_run: int = 60
+    max_calls_per_run: int = 500
     max_input_tokens_per_call: int = 6000
     max_documents_per_tender: int = 3
     max_pages_per_document: int = 80

@@ -143,7 +143,6 @@ global:
     - management information system
   synonyms:
     "ai": "artificial intelligence"
-    "ml": "machine learning"
     "genai": "generative ai"
     "llm": "large language model"
     "cctv": "closed circuit television"
@@ -162,7 +161,6 @@ global:
     "stt": "speech to text"
     "ocr": "optical character recognition"
     "idp": "intelligent document processing"
-    "bi": "business intelligence"
     "mis": "management information system"
     "scada": "supervisory control and data acquisition"
     "uav": "drone"
@@ -278,7 +276,8 @@ capabilities:
                restricted area monitoring, worker safety monitoring]
       medium: [safety monitoring, industrial safety, hse monitoring, behaviour based safety, zone monitoring]
       weak: [safety, ppe]
-    negative: [supply of ppe, supply of safety shoes, safety helmets supply, fire safety audit, fire extinguisher]
+    negative: [supply of ppe, supply of safety shoes, safety helmets supply, fire safety audit, fire extinguisher,
+               gloves, leather, harness, safety net, safety shoes, safety belt, fire safety, firefighting, fire fighting]
     example_requirements:
       - "AI-based detection of PPE non-compliance at plant gates"
       - "Video analytics for unsafe acts in mines and coal handling plants"
@@ -684,7 +683,7 @@ capabilities:
     keywords:
       strong: [manufacturing execution system, production planning and scheduling, traceability system,
                digital thread, plm integration, bom management, dfmea, generative design]
-      medium: [mes, plm, production planning, quality management system, cad automation]
+      medium: [mes implementation, mes software, plm, production planning, quality management system, cad automation]
       weak: [manufacturing, production]
     negative: [supply of raw material, fabrication work, machining job work]
     example_requirements: ["Implementation of MES with end-to-end traceability for production unit"]

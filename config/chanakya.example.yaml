@@ -383,6 +383,7 @@ semantic:
   backend: lexical           # lexical (free, default) | ollama (local embeddings only)
   embed_model: embeddinggemma
   candidate_threshold: 0.12
+  weak_only_threshold: 0.15  # bar when the only rule evidence is weak context words (safety, plant, equipment)
 
 llm:
   mode: disabled             # cloud | local | disabled | fake (simulated, for demos/tests)
@@ -398,14 +399,14 @@ llm:
   max_output_tokens_deep: 1200
   max_retries: 2
   send_format_schema: auto   # auto = only for local Ollama (cloud does not support structured outputs)
-  prompt_version: v1
+  prompt_version: v2
   triage_band: [0.20, 0.50]  # combined match score range where the cheap model resolves ambiguity
   deep_min_score: 0.45
 
 budget:
   max_cost_per_run_usd: 0.50
   max_cost_per_day_usd: 2.00
-  max_calls_per_run: 60
+  max_calls_per_run: 500
   max_input_tokens_per_call: 6000
   max_documents_per_tender: 3
   max_pages_per_document: 80

@@ -216,3 +216,40 @@ def test_en_and_em_dashes_in_notice_text_are_normalised():
     from chanakya.pipeline.textnorm import normalize
 
     assert normalize("AI\u2013based video\u2014analytics") == normalize("AI-based video-analytics")
+
+
+# ---------------------------------------------------------------- false positives seen on the live book (2026-10-10)
+@pytest.mark.parametrize("title", [
+    "Imp. Dev. Of lanes and Drains by Pdg. RMC from H.No.16 to H.No.41 BI -Block",   # BI is a block, not business intelligence
+    "SYP CETIRIZINE 5 MG/5 ML 30 ML",                                                 # ml is millilitres
+    "REPAIR/MAINTENANCE OF MES SUB STN, SECURITY LIGHT, SIGNBOARD",                  # MES is Military Engineer Services
+    "CUT-RESISTANCE INDUSTRIAL SAFETY GLOVES with polyurethane",
+])
+def test_abbreviations_and_goods_do_not_reach_candidate(clf, title):
+    assert clf.classify(rec(title)).decision in (FilterDecision.REJECTED, FilterDecision.LOW)
+
+
+def test_device_words_alone_are_never_strong(clf):
+    r = clf.classify(rec("CCTV Surveillance System for the new depot"))
+    assert r.decision == FilterDecision.CANDIDATE and not r.hits[0].strong
+
+
+def test_maintenance_of_installed_devices_is_the_equipment_route(clf):
+    r = clf.classify(rec("Annual Maintenance Contract (AMC) for CCTV Surveillance System installed at various Sub-Stations"))
+    assert r.hardware_supply and r.decision == FilterDecision.CANDIDATE
+
+
+def test_triage_verdict_bounds_the_priority(kb):
+    base = dict(filter_decision=FilterDecision.CANDIDATE, best_capability="CAP-CV-VA", capability_score=0.49,
+                eligibility=EligibilityStatus.UNKNOWN, status="active", closing_at_utc=None, estimated_value_inr=None,
+                organisation=None, opportunity_type="Tender")
+    scorer = Scorer(ScoringSettings(), kb)
+    yes = scorer.score(ScoreInput(**base, triage_relevant="yes"))
+    assert yes.priority in (Priority.P1, Priority.P2)
+    unclear = scorer.score(ScoreInput(**base, triage_relevant="unclear"))
+    assert unclear.priority == Priority.P3 and any(f.startswith("AI TRIAGE UNCLEAR") for f in unclear.flags)
+    no = scorer.score(ScoreInput(**base, triage_relevant="no"))
+    assert no.priority == Priority.P4
+    # A document analysis that finds a fit outranks the title-only triage verdict.
+    read = scorer.score(ScoreInput(**base, triage_relevant="unclear", deep_fit="existing_offering"))
+    assert read.priority in (Priority.P1, Priority.P2)

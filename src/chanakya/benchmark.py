@@ -155,7 +155,9 @@ def run_benchmark(settings: Settings, dataset: Path, llm_accuracy: float = 0.9) 
         combined = {cid: max(r, 0.65 * r + 0.35 * min(1.0, sem.get(cid, 0) / SEM_NORM)) for cid, r in by_cap.items()}
         best = max(combined.values()) if combined else 0.0
         best_sem = max(sem.values()) if sem else 0.0
-        if decision == FilterDecision.LOW and best_sem >= settings.semantic.candidate_threshold and not rr.exclusions:
+        sem_bar = settings.semantic.candidate_threshold if (rr.tech_signals or rr.high_recall) \
+            else max(settings.semantic.candidate_threshold, settings.semantic.weak_only_threshold)
+        if decision == FilterDecision.LOW and best_sem >= sem_bar and not rr.exclusions:
             decision = FilterDecision.CANDIDATE
         top = sorted(combined, key=combined.get, reverse=True)[:3]
         cards = [c for c in all_cards if c["id"] in top]

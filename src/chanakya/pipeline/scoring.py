@@ -202,6 +202,14 @@ class Scorer:
         if s.hardware_supply and s.deep_fit not in ("existing_offering", "custom_build") and prio in (Priority.P1, Priority.P2):
             prio = Priority.P3
             flags.append("EQUIPMENT SUPPLY — monitor for SI/partner route")
+        # A triage verdict bounds the priority until a document analysis says otherwise.
+        if s.deep_fit not in ("existing_offering", "custom_build"):
+            if s.triage_relevant == "no" and prio != Priority.P4:
+                prio = Priority.P4
+                flags.append("AI TRIAGE: NOT RELEVANT")
+            elif s.triage_relevant == "unclear" and prio in (Priority.P1, Priority.P2):
+                prio = Priority.P3
+                flags.append("AI TRIAGE UNCLEAR: human check")
         if prio in (Priority.P1, Priority.P2):
             if s.eligibility in (EligibilityStatus.UNKNOWN, EligibilityStatus.POTENTIALLY_ELIGIBLE):
                 flags.append("ELIGIBILITY UNVERIFIED — human review required")

@@ -106,6 +106,7 @@ class Notice:
     filter_decision: str | None = "candidate"
     status: str = "active"
     equipment_cap: bool = False       # equipment supply: the scorer caps P1/P2 at P3
+    triage_cap: str | None = None     # "no": the scorer forces P4; "unclear": it caps P1/P2 at P3
     stored_priority: str | None = None
     label: int | None = None          # 1 relevant, 0 irrelevant, None unlabelled
     label_source: str | None = None
@@ -208,6 +209,8 @@ def load_notices(session: Session) -> tuple[list[Notice], dict[str, Any]]:
         flags = (breakdown or {}).get("flags") or []
         tech_reason = str((comps.get("technical") or {}).get("reason", ""))
         equipment = any(str(f).startswith("EQUIPMENT SUPPLY") for f in flags) or tech_reason.startswith("equipment supply")
+        triage_cap = ("no" if any(str(f).startswith("AI TRIAGE: NOT RELEVANT") for f in flags)
+                      else "unclear" if any(str(f).startswith("AI TRIAGE UNCLEAR") for f in flags) else None)
         exp = explicit.get(oid)
         label, source = derive_label(exp, review_status)
         if label is None and review_status in IGNORED_STATUSES and review_status != ReviewStatus.NEW.value:
@@ -216,7 +219,8 @@ def load_notices(session: Session) -> tuple[list[Notice], dict[str, Any]]:
                     or (exp == "irrelevant" and review_status in POSITIVE_STATUSES)):
             conflicts += 1
         notices.append(Notice(opportunity_id=oid, scores=scores, fit_scores=fit_scores, filter_decision=decision,
-                              status=status or "active", equipment_cap=equipment, stored_priority=priority,
+                              status=status or "active", equipment_cap=equipment, triage_cap=triage_cap,
+                              stored_priority=priority,
                               label=label, label_source=source))
     return notices, {"ignored_statuses": ignored, "n_conflicts": conflicts}
 
@@ -267,6 +271,10 @@ def band_for(n: Notice, weights: dict[str, float], thresholds: dict[str, float],
     else:
         band = "P4"
     if n.equipment_cap and band in FLAGGED_BANDS:
+        band = "P3"
+    if n.triage_cap == "no":
+        band = "P4"
+    elif n.triage_cap == "unclear" and band in FLAGGED_BANDS:
         band = "P3"
     return band
 

@@ -196,6 +196,8 @@ class Pipeline:
         self.scorer = Scorer(settings.scoring, self.kb)
         self.on_event = None  # optional callable(dict) — the desk narrates from these
         self.should_stop = None  # optional callable() -> bool, checked between sources and page chunks
+        self.checkpoint = None  # optional callable(), run after each source and each page chunk of a scan
+        self._budget: tuple[str, BudgetGuard, Analyzer | None] | None = None  # one guard per run
 
     def emit(self, kind: str, message: str, **data) -> None:
         """Tell a listener what just happened. Listeners must not break the run."""
@@ -282,6 +284,7 @@ class Pipeline:
                     stopped = True
                     break
                 self._scan_source(run, stats, cfg, since, max_pages)
+                self._run_checkpoint(run, stats)
         except StoppedScan:
             stopped = True
         if stopped:
@@ -290,7 +293,7 @@ class Pipeline:
             self.emit("acquire", "Stopping the watch. Stored notices stay on the desk.", status="partial")
             self.session.commit()
             return True
-        stats.expired_marked = mark_expired(self.session, run.id)
+        stats.expired_marked += mark_expired(self.session, run.id)
         self.session.commit()
         return False
 
@@ -381,6 +384,7 @@ class Pipeline:
                         f"{cfg.name or cfg.id}: still inside the date window after {pages_done} pages. Continuing.",
                         source=cfg.id, status="running", pages=pages_done,
                     )
+                    self._run_checkpoint(run, stats)
                     continue
                 break
             self.session.commit()
@@ -449,6 +453,23 @@ class Pipeline:
             source=cfg.id, status=info.get("status"), seen=seen, new=counts["new"], updated=counts["updated"],
         )
 
+    def _run_checkpoint(self, run: ScanRun, stats: RunStats) -> None:
+        """Let the caller work on what is stored so far. A long listing must not hold it back.
+
+        Everything scanned is committed before this runs, so a failure here costs only the
+        checkpoint: the scan goes on and the closing assessment picks the notices up.
+        """
+        if self.checkpoint is None:
+            return
+        try:
+            # Closed notices are marked first, as at the end of a scan, so none is scored as open.
+            stats.expired_marked += mark_expired(self.session, run.id)
+            self.session.commit()
+            self.checkpoint()
+        except Exception:  # noqa: BLE001 - never blame a source for an assessment error
+            self.session.rollback()
+            log.exception("scan checkpoint failed")
+
     # ------------------------------------------------------------------ assess
     def _needs_assessment(self, scope: str, run_id: str | None,
                           only_ids: list[str] | None = None) -> list[Opportunity]:
@@ -489,25 +510,30 @@ class Pipeline:
                 continue
         return "|".join(sorted(parts))
 
-    def assess(self, run: ScanRun | None, stats: RunStats, scope: str = "changed",
-               only_ids: list[str] | None = None) -> None:
-        run_id = run.id if run else None
-        guard = BudgetGuard(self.settings.budget, self.settings.pricing,
-                            self.provider.mode if self.provider else "disabled",
-                            spent_today_before_run=spend_since(self.session, start_of_ist_day_utc()))
-        analyzer = Analyzer(self.provider, self.settings, self.kb, self.session, guard, run_id) if self.provider else None
+    def _budget_for(self, run_id: str | None, stats: RunStats) -> tuple[BudgetGuard, Analyzer | None]:
+        """One guard and analyser per run, so per-run limits hold across every batch of that run."""
+        if self._budget is None or run_id is None or self._budget[0] != run_id:
+            guard = BudgetGuard(self.settings.budget, self.settings.pricing,
+                                self.provider.mode if self.provider else "disabled",
+                                spent_today_before_run=spend_since(self.session, start_of_ist_day_utc()))
+            analyzer = Analyzer(self.provider, self.settings, self.kb, self.session, guard, run_id) if self.provider else None
+            self._budget = (run_id or "", guard, analyzer)
         stats.llm_mode = self.provider.mode if self.provider else "disabled"
         if self.semantic_note and self.semantic_note not in stats.coverage_notes:
             stats.coverage_notes.append(self.semantic_note)
-        opps = self._needs_assessment(scope, run_id, only_ids)
+        return self._budget[1], self._budget[2]
+
+    def _assess_batch(self, opps: list[Opportunity], guard: BudgetGuard, analyzer: Analyzer | None,
+                      stats: RunStats, *, stoppable: bool = False) -> None:
         # Assess the most promising first so a limited budget is spent where it matters.
         prepared = []
         for o in opps:
             rr = self.classifier.classify(record_from_opportunity(o))
             prepared.append((o, rr))
         prepared.sort(key=lambda t: t[1].best_score, reverse=True)
-        self.emit("match", f"Matching {len(prepared)} notices to Wayam's capabilities. Unrelated ones stop before any model call.")
         for o, rr in prepared:
+            if stoppable and self.should_stop and self.should_stop():
+                break
             self._assess_one(o, rr, analyzer, stats)
             stats.assessed += 1
             band = (o.priority or "").lower()
@@ -518,6 +544,31 @@ class Pipeline:
                       decision=o.filter_decision, priority=o.priority,
                       why=(o.intelligence or {}).get("why_match"),
                       score=o.relevance_score)
+        stats.llm_cost_usd = round(guard.run_cost, 6)
+        stats.budget_blocked_reasons = guard.blocked_reasons
+
+    def assess_stored(self, run: ScanRun | None, stats: RunStats) -> int:
+        """Assess notices that are stored but not yet assessed, while a scan is still reading.
+
+        Only never-assessed and changed notices are taken. Retries (budget, failures) and
+        knowledge-base changes wait for the closing ``assess`` so they are not repeated per chunk.
+        """
+        opps = list(self.session.scalars(select(Opportunity).where(or_(
+            Opportunity.assessed_hash.is_(None), Opportunity.assessed_hash != Opportunity.content_hash))).all())
+        if not opps:
+            return 0
+        guard, analyzer = self._budget_for(run.id if run else None, stats)
+        self.emit("match", f"Matching {len(opps)} stored notices while the list is still being read.")
+        self._assess_batch(opps, guard, analyzer, stats, stoppable=True)
+        return len(opps)
+
+    def assess(self, run: ScanRun | None, stats: RunStats, scope: str = "changed",
+               only_ids: list[str] | None = None) -> None:
+        run_id = run.id if run else None
+        guard, analyzer = self._budget_for(run_id, stats)
+        opps = self._needs_assessment(scope, run_id, only_ids)
+        self.emit("match", f"Matching {len(opps)} notices to Wayam's capabilities. Unrelated ones stop before any model call.")
+        self._assess_batch(opps, guard, analyzer, stats)
         self.emit(
             "recommend",
             f"Pass complete. {stats.strong} strong, {stats.candidates} to review, {stats.low} weak, "
@@ -525,8 +576,6 @@ class Pipeline:
             strong=stats.strong, candidates=stats.candidates, rejected=stats.rejected,
             triage=stats.triage_calls, deep=stats.deep_calls,
         )
-        stats.llm_cost_usd = round(guard.run_cost, 6)
-        stats.budget_blocked_reasons = guard.blocked_reasons
         if guard.unpriced_models:
             stats.coverage_notes.append(f"no price configured for models {sorted(guard.unpriced_models)} — cost recorded as 0")
 
@@ -576,8 +625,12 @@ class Pipeline:
         ranked = sorted(combined.items(), key=lambda kv: kv[1], reverse=True)
         best_cap, best_score = ranked[0] if ranked else (None, 0.0)
         best_sem = max(sem_scores.values()) if sem_scores else 0.0
-        if decision == FilterDecision.LOW and best_sem >= self.settings.semantic.candidate_threshold \
-                and not rr.exclusions:
+        # Similarity alone promotes a notice only when the rules saw a technology signal or a technology
+        # category. Weak context words share vocabulary with almost anything, so they need a higher bar.
+        sem = self.settings.semantic
+        sem_bar = sem.candidate_threshold if (rr.tech_signals or rr.high_recall) \
+            else max(sem.candidate_threshold, sem.weak_only_threshold)
+        if decision == FilterDecision.LOW and best_sem >= sem_bar and not rr.exclusions:
             decision = FilterDecision.CANDIDATE
             rr.reasons.append(f"promoted by semantic similarity {best_sem:.2f} to {max(sem_scores, key=sem_scores.get)}")
         if decision == FilterDecision.REJECTED:
@@ -603,8 +656,10 @@ class Pipeline:
         state = AnalysisState.NOT_NEEDED.value
         notes: list[str] = []
         lo, hi = self.settings.llm.triage_band
-        wants_triage = active and decision in (FilterDecision.CANDIDATE, FilterDecision.STRONG) and \
-            (lo <= best_score < hi or (decision == FilterDecision.CANDIDATE and best_score < lo))
+        # Every candidate is triaged: similarity can lift its combined score past the band, but without
+        # a strong phrase the rules have not shown that software or analytics is what is being bought.
+        wants_triage = active and (decision == FilterDecision.CANDIDATE
+                                   or (decision == FilterDecision.STRONG and lo <= best_score < hi))
         if analyzer is None and active and decision in (FilterDecision.CANDIDATE, FilterDecision.STRONG):
             state = AnalysisState.SKIPPED_DISABLED.value
         if analyzer is not None and wants_triage:

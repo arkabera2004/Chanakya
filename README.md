@@ -37,7 +37,7 @@ CHANAKYA_CONFIG=config/chanakya.demo.yaml chanakya serve
 | GePNIC connector (eprocure / etenders / state portals) | Listing + detail parsing built and fixture-tested; home-page variant verified against live rows. Live pagination unverified. |
 | Manual import (CSV/XLSX/YAML + documents) | Working, tested. Compliant path for GeM bidplus and IREPS (both disallow automated access) and PSU sites. |
 | Rules + semantic funnel, eligibility, scoring | Working, tested, benchmarked. |
-| Ollama Cloud / local provider | Implemented against the documented API with mocked tests. **Not exercised with a real key** (none provided). |
+| Ollama Cloud / local provider | Working with the real key on `gpt-oss:20b`: 247 triage calls on the live book by 2026-10-11, all valid JSON, about $0.016 in total. The deep model (`gpt-oss:120b`) has not run yet: no notice has documents attached. |
 | Excel (8 sheets) + email (SMTP / file) | Working, tested (file provider). SMTP tested with mocks only. Digest daily or weekly, plus an optional alert for each new P1 (`email.alert_on_new_p1`). |
 | Docker / CI | Files provided; image **not built here** (no Docker daemon). CI runs the full test suite. |
 | Email alerts | Digest daily or weekly, alert for each new P1, corrigendum alert and deadline reminders for tracked notices. Tested with the file provider only. |
@@ -48,7 +48,7 @@ CHANAKYA_CONFIG=config/chanakya.demo.yaml chanakya serve
 | Award notices | Parser and `chanakya awards import\|report` built. The CPPP results page is a CAPTCHA form, so `awards scan` is disabled and the parser is unverified against a real page. |
 | BOQ tables | Ruled PDF tables reach the analyser as rows. Tested on generated PDFs only. |
 
-313 automated tests pass offline (`pytest -q`). See `docs/01_EXECUTIVE_SUMMARY.md` for findings and
+323 automated tests pass offline (`pytest -q`). See `docs/01_EXECUTIVE_SUMMARY.md` for findings and
 `docs/20_RISKS_AND_OPEN_QUESTIONS.md` for what still needs validation.
 
 ## Quick start
@@ -101,7 +101,7 @@ Exit codes: `0` ok · `1` run/config error · `2` every source failed · `3` par
 ```
 config/            chanakya.example.yaml · chanakya.demo.yaml · wayam_capabilities.yaml (editable KB)
 src/chanakya/      connectors/ pipeline/ documents/ llm/ reporting/ cli.py app.py db.py security.py http.py
-tests/             313 offline tests; fixtures/ (observed portal rows, synthetic fixtures, labelled benchmark set)
+tests/             323 offline tests; fixtures/ (observed portal rows, synthetic fixtures, labelled benchmark set)
 scripts/           make_demo_data.py · validate_live_snapshot.py · render_capability_matrix.py · cost_model.py · backup.sh
 docs/              01 to 21 design documents, CHANAKYA_BUILD_MASTER_PROMPT.md, validation/
 ```

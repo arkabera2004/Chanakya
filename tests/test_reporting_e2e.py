@@ -383,3 +383,26 @@ def test_email_delivery_rows_have_unique_keys(settings, session):
     run(settings, session, email=True)
     keys = [x.idempotency_key for x in session.scalars(select(EmailDelivery))]
     assert len(keys) == len(set(keys)) == 2
+
+
+def test_notices_are_assessed_while_the_scan_is_still_running(settings, session, monkeypatch):
+    """A pass that dies before its closing assessment must not leave the book unscored."""
+    from chanakya.pipeline.runner import Pipeline
+
+    def dies(self, *a, **kw):
+        raise RuntimeError("process ended before the closing assessment")
+
+    monkeypatch.setattr(Pipeline, "assess", dies)
+    write_records(settings.sources[0].path, sample_records())
+    res = run(settings, session, export=False)
+    assert res.run.status == "failed" and res.stats.assessed == 6
+    opps = {o.source_tender_id: o for o in session.scalars(select(Opportunity))}
+    assert all(o.filter_decision and o.priority for o in opps.values())
+    assert opps["2026_SYNOLD_000105_1"].status == "expired" and opps["2026_SYNOLD_000105_1"].priority == "P4"
+
+
+def test_per_run_call_limit_holds_across_scan_checkpoints(settings, session):
+    settings.budget.max_calls_per_run = 1
+    write_records(settings.sources[0].path, sample_records())
+    r = run(settings, session, export=False)
+    assert llm_calls(session, r.run.id) <= 1

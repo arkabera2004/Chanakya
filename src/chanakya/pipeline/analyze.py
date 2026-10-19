@@ -203,7 +203,16 @@ class Analyzer:
     @staticmethod
     def _messages(purpose: str, schema_text: str, data: dict) -> list[ChatMessage]:
         task_line = ("Task: triage — decide whether this notice is a plausible opportunity for one of the candidate "
-                     "Wayam capabilities." if purpose == "triage" else
+                     "Wayam capabilities. Wayam sells software, AI, analytics and data services. Judge what is being "
+                     "bought, not the sector or a shared topic word.\n"
+                     'Answer "yes" only when the buyer is procuring software, AI, analytics, data or IT services that '
+                     "a candidate capability could deliver.\n"
+                     'Answer "no" when the notice buys goods, consumables, spares, machinery, civil or electrical '
+                     "works, repair, maintenance or manpower (safety gloves are not safety analytics; a bolt supply "
+                     "contract is not manufacturing software).\n"
+                     'Answer "unclear" when the title is too short or vague to tell, or when it is camera, sensor or '
+                     "control-room infrastructure with no stated software scope, where analytics could only be added "
+                     "through a partner." if purpose == "triage" else
                      "Task: deep analysis — extract scope, technical fit and stated eligibility requirements.")
         user = (f"{task_line}\nReturn JSON exactly in this shape: {schema_text}\n"
                 f"Only use capability_ids from candidate_capabilities.\n"

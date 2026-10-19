@@ -47,6 +47,7 @@ class RuleResult:
     tech_signals: list[str]
     reasons: list[str]
     hardware_supply: bool = False
+    high_recall: bool = False
 
     @property
     def top(self) -> list[CapabilityHit]:
@@ -79,6 +80,9 @@ def _dedupe(tiers: list[list[str]], synonyms: dict[str, str]) -> list[list[str]]
 
 
 HARDWARE_LEAD = re.compile(r"^(?:\W*)(?:rate contract for |procurement of |purchase of )?(?:supply|supplying|procurement|purchase)\b")
+# Work on devices anywhere in the title: fitting them, keeping them running, replacing parts.
+HARDWARE_WORK = re.compile(r"\b(?:supply|sitc|installation|commissioning|provision of|provn of|amc|camc|annual maintenance|"
+                           r"maintenance contract|repair|repairs|spare|spares)\b")
 SOFTWARE_TERMS = ("software", "analytics", "artificial intelligence", "ai based", "ai-based", "platform", "application",
                   "development", "solution", "implementation", "integration", "system integrator", "services")
 
@@ -106,9 +110,13 @@ class RuleClassifier:
                 return sum(base * (TITLE_BOOST if phrase_regex(t).search(title) else 1.0) for t in terms)
 
             raw = w(strong, W_STRONG) + w(medium, W_MEDIUM) + w(weak, W_WEAK) - W_NEG * len(negative)
-            # Weak-only matches are capped below the candidate threshold.
+            # Weak-only matches are capped below the candidate threshold, and a match with no
+            # strong phrase is capped below the strong one: device and context words (cctv,
+            # dashboard) say what a notice is about, not that analytics or software is bought.
             if not strong and not medium:
                 raw = min(raw, self.settings.candidate_threshold - 0.01)
+            elif not strong:
+                raw = min(raw, self.settings.strong_threshold - 0.01)
             score = max(0.0, min(1.0, raw))
             hits.append(CapabilityHit(cap.id, round(score, 4), strong, medium, weak, negative))
         hits.sort(key=lambda h: h.score, reverse=True)
@@ -117,8 +125,8 @@ class RuleClassifier:
     def classify(self, rec: TenderRecord) -> RuleResult:
         title, body = self.prepare(rec)
         hits = self.score_capabilities(title, body)
-        hardware = bool(HARDWARE_LEAD.search(title)) and not any(t in body for t in SOFTWARE_TERMS) \
-            and not any(h.strong for h in hits if h.score > 0)
+        hardware = bool(HARDWARE_LEAD.search(title) or HARDWARE_WORK.search(title)) \
+            and not any(t in body for t in SOFTWARE_TERMS) and not any(h.strong for h in hits if h.score > 0)
         if hardware:
             # Equipment supply without a software/analytics component: never a "strong" fit on its own;
             # it is a partner/SI route at best, so cap it into the triage band.
@@ -164,4 +172,4 @@ class RuleClassifier:
             if h.score > 0:
                 reasons.append(f"{h.capability_id} {h.score:.2f} via {', '.join((h.strong + h.medium + h.weak)[:4])}"
                                + (f"; negative: {', '.join(h.negative[:2])}" if h.negative else ""))
-        return RuleResult(decision, round(best, 4), hits, exclusions, tech, reasons, hardware)
+        return RuleResult(decision, round(best, 4), hits, exclusions, tech, reasons, hardware, bool(high_recall))
