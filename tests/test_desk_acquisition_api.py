@@ -97,6 +97,25 @@ def test_create_job_runs_to_success_and_is_inspectable(desk):
         assert all(j["status"] == "succeeded" for j in filtered)
 
 
+def test_analytics_with_no_jobs_is_zero_not_unavailable(desk):
+    with TestClient(create_app()) as client:
+        body = client.get("/api/acquisition/analytics").json()
+    assert body["jobs_total"] == 0
+    assert body["by_status"] == {} and body["by_provider"] == {}
+    assert body["avg_duration_s"] is None, "no terminal job exists yet, so duration is unknown, not 0"
+
+
+def test_analytics_reflects_a_real_completed_job(desk):
+    with TestClient(create_app()) as client:
+        created = client.post("/api/acquisition/jobs", json={"provider_id": "scrapling", "url": "https://x/"}).json()
+        _wait_terminal(client, created["id"])
+        body = client.get("/api/acquisition/analytics").json()
+    assert body["jobs_total"] == 1
+    assert body["by_status"]["succeeded"] == 1
+    assert body["by_provider"]["scrapling"]["succeeded"] == 1
+    assert body["avg_duration_s"] is not None and body["avg_duration_s"] >= 0
+
+
 def test_get_unknown_job_is_404(desk):
     with TestClient(create_app()) as client:
         resp = client.get("/api/acquisition/jobs/does-not-exist")

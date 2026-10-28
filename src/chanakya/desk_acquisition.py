@@ -159,3 +159,40 @@ def retry_job(job_id: str) -> dict[str, Any]:
         raise HTTPException(409, "job is not eligible for retry (must be failed and retryable)")
     jm.submit(new_job.id)
     return _job_dict(new_job)
+
+
+@router.get("/api/acquisition/analytics")
+def analytics() -> dict[str, Any]:
+    """Real aggregates over persisted AcquisitionJob rows — nothing here is estimated or
+    fabricated. ``jobs_total: 0`` means no jobs exist yet, not that metrics are unavailable;
+    duration/retry figures are explicitly ``null`` when there is no terminal job to compute
+    them from, so an empty dataset is never confused with a zero result."""
+    settings = server.desk_settings()
+    jm = _manager(settings)
+    with jm.jobs_session() as session:
+        jobs = session.query(AcquisitionJob).all()
+
+    by_status: dict[str, int] = {}
+    by_provider: dict[str, dict[str, int]] = {}
+    durations_s: list[float] = []
+    retried = 0
+    records_produced = 0
+    for job in jobs:
+        by_status[job.status] = by_status.get(job.status, 0) + 1
+        provider_counts = by_provider.setdefault(job.provider_id, {})
+        provider_counts[job.status] = provider_counts.get(job.status, 0) + 1
+        if job.attempt > 1:
+            retried += 1
+        records_produced += job.record_count
+        if job.started_at and job.finished_at:
+            durations_s.append((job.finished_at - job.started_at).total_seconds())
+
+    return {
+        "jobs_total": len(jobs),
+        "by_status": by_status,
+        "by_provider": by_provider,
+        "records_produced": records_produced,
+        "jobs_retried": retried,
+        "avg_duration_s": round(sum(durations_s) / len(durations_s), 3) if durations_s else None,
+        "p95_duration_s": round(sorted(durations_s)[int(len(durations_s) * 0.95)], 3) if durations_s else None,
+    }
