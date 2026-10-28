@@ -38,8 +38,19 @@ export type AcquisitionJob = {
 
 export type AcquisitionJobDetail = AcquisitionJob & { events: AcquisitionJobEvent[] };
 
+export type AcquisitionAnalytics = {
+  jobs_total: number;
+  by_status: Record<string, number>;
+  by_provider: Record<string, Record<string, number>>;
+  records_produced: number;
+  jobs_retried: number;
+  avg_duration_s: number | null;
+  p95_duration_s: number | null;
+};
+
 export const acquisitionApi = {
   providers: () => request<{ providers: ProviderStatus[] }>("/api/acquisition/providers"),
+  analytics: () => request<AcquisitionAnalytics>("/api/acquisition/analytics"),
   jobs: (opts?: { status?: string; providerId?: string; limit?: number }) => {
     const params = new URLSearchParams();
     if (opts?.status) params.set("status", opts.status);

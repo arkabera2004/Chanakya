@@ -4,7 +4,7 @@ import { CircleAlert, CircleCheck, CircleDashed, RotateCcw, Square, type LucideI
 import { useEffect, useState } from "react";
 
 import { Button, EmptyState, Metric, PageBody, PageHeader, Panel, StatusChip, type Tone } from "@/components/ui";
-import { acquisitionApi, type AcquisitionJob, type AcquisitionJobDetail, type ProviderStatus } from "@/lib/api-acquisition";
+import { acquisitionApi, type AcquisitionAnalytics, type AcquisitionJob, type AcquisitionJobDetail, type ProviderStatus } from "@/lib/api-acquisition";
 import { count, when } from "@/lib/format";
 
 const JOB_STATUS: Record<string, { tone: Tone; label: string }> = {
@@ -134,6 +134,7 @@ function JobDetailPanel({ job, onClose }: { job: AcquisitionJobDetail; onClose: 
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<ProviderStatus[] | null>(null);
   const [jobs, setJobs] = useState<AcquisitionJob[] | null>(null);
+  const [analytics, setAnalytics] = useState<AcquisitionAnalytics | null>(null);
   const [selected, setSelected] = useState<AcquisitionJobDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -142,11 +143,12 @@ export default function ProvidersPage() {
     let timer = 0;
 
     function load() {
-      Promise.all([acquisitionApi.providers(), acquisitionApi.jobs({ limit: 50 })])
-        .then(([p, j]) => {
+      Promise.all([acquisitionApi.providers(), acquisitionApi.jobs({ limit: 50 }), acquisitionApi.analytics()])
+        .then(([p, j, a]) => {
           if (cancelled) return;
           setProviders(p.providers);
           setJobs(j.jobs);
+          setAnalytics(a);
           setError(null);
           const open = j.jobs.some((job) => job.status === "queued" || job.status === "running");
           if (open) timer = window.setTimeout(load, 3000);
@@ -193,7 +195,17 @@ export default function ProvidersPage() {
         {providers ? (
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <Metric label="Ready" value={count(ready)} hint={`${count(providers.length)} total`} />
-            <Metric label="Jobs" value={count(jobs?.length ?? 0)} hint="most recent 50" />
+            <Metric label="Jobs" value={count(analytics?.jobs_total ?? jobs?.length ?? 0)} hint="all time" />
+            <Metric
+              label="Succeeded / Failed"
+              value={`${count(analytics?.by_status.succeeded ?? 0)} / ${count((analytics?.by_status.failed ?? 0) + (analytics?.by_status.partial ?? 0))}`}
+              hint="partial counted with failed"
+            />
+            <Metric
+              label="Avg duration"
+              value={analytics?.avg_duration_s != null ? `${analytics.avg_duration_s.toFixed(1)}s` : "—"}
+              hint={analytics?.avg_duration_s != null ? `p95 ${analytics.p95_duration_s?.toFixed(1)}s` : "no finished job yet"}
+            />
           </div>
         ) : null}
 
