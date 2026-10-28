@@ -15,11 +15,14 @@ import asyncio
 
 from ...config import CrawleeSettings
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability
+from ..extraction import extract_by_selectors
 
 
 class CrawleeProvider(AcquisitionProvider):
     provider_id = "crawlee"
-    capabilities = frozenset({ProviderCapability.HTTP_FETCH, ProviderCapability.LINK_DISCOVERY})
+    capabilities = frozenset({
+        ProviderCapability.HTTP_FETCH, ProviderCapability.LINK_DISCOVERY, ProviderCapability.STRUCTURED_EXTRACTION,
+    })
     requires_credentials = False
 
     def __init__(self, settings: CrawleeSettings) -> None:
@@ -96,9 +99,22 @@ class CrawleeProvider(AcquisitionProvider):
                 error="crawlee: no handler outcome recorded", retryable=True,
             )
 
+        records: list = []
+        diagnostics: dict = {"status_code": outcome.get("status_code")}
+        selectors: dict[str, str] = request.extra.get("selectors", {})
+        if outcome["status"] == "ok" and selectors and outcome.get("content"):
+            records, review = extract_by_selectors(
+                outcome["content"], selectors, source_id=request.source_id, url=outcome.get("url", request.url),
+                platform=request.extra.get("platform", "crawlee"), provider_id=self.provider_id,
+            )
+            diagnostics["extracted"] = review if review else (records[0].raw if records else {})
+            if review:
+                diagnostics["needs_review"] = review
+
         return AcquisitionResult(
             provider_id=self.provider_id, url=outcome.get("url", request.url), status=outcome["status"],
-            raw_content=outcome.get("content"), content_type="text/html" if outcome.get("content") else None,
+            records=records, raw_content=outcome.get("content"),
+            content_type="text/html" if outcome.get("content") else None,
             error=outcome.get("error"), retryable=outcome.get("retryable", False),
-            diagnostics={"status_code": outcome.get("status_code")},
+            diagnostics=diagnostics,
         )

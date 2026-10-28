@@ -72,6 +72,21 @@ def test_404_is_classified_failed_not_retryable(local_server):
         _Handler.status = 200
 
 
+def test_selectors_extract_a_tender_record(local_server):
+    _Handler.body = b'<html><body><h1 class="title">Supply of Widgets</h1><span class="org">Synthetic Dept</span></body></html>'
+    try:
+        req = AcquisitionRequest(
+            url=local_server, source_id="test", extra={"selectors": {"title": "h1.title", "organisation": "span.org"}},
+        )
+        res = _provider().fetch(req)
+        assert res.status == "ok"
+        assert len(res.records) == 1
+        assert res.records[0].title == "Supply of Widgets"
+        assert res.records[0].organisation == "Synthetic Dept"
+    finally:
+        _Handler.body = b"<html><body>hello crawlee</body></html>"
+
+
 def test_403_is_classified_blocked(local_server):
     _Handler.status = 403
     try:
