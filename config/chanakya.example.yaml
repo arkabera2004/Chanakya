@@ -342,14 +342,20 @@ sources:
     fetch_detail: false
     max_pages: 2
     verification_status: candidate
-  # CPPP aggregates central tenders, state tenders, and the GeM bid mirror. Lists are public HTML.
+  # CPPP aggregates central tenders, state tenders, and the GeM bid mirror. Lists were public
+  # server-rendered HTML as of 2026-10-10. Re-verified 2026-10-29: eprocure.gov.in/cppp/ has
+  # migrated to a client-rendered Vue SPA (serves only a JS bundle + "#app" div; the old
+  # /latestactivetendersnew/{feed} paths now 404). This connector (httpx+bs4 against
+  # server-rendered HTML) can no longer reach the listing — downgraded from verified_working
+  # until a JS-rendering or the SPA's REST API (served under /cpppapi, endpoints not yet
+  # reverse-engineered) is implemented. See docs/20_RISKS_AND_OPEN_QUESTIONS.md.
   - id: cppp_central
     type: cppp
     name: GeM-CPPP — Central active tenders
     feed: cpppdata
     max_pages: 10
     overlap_hours: 12
-    verification_status: verified_working
+    verification_status: unsupported
   - id: cppp_states
     type: cppp
     name: GeM-CPPP — State active tenders

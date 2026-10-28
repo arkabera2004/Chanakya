@@ -4,9 +4,9 @@
 
 | Claim | Status | How to verify |
 |---|---|---|
-| CPPP `cpppdata` listing structure (columns, Tender ID format, pagination) | Observed on 2026-10-10 via web fetch; parser tested on a reconstruction of that page | `chanakya sources test -s cppp_central` from the deployment network |
-| CPPP `mmpdata` / `gemdata` share the same template | **Assumed** (same site template) | `sources test` for each |
-| GePNIC active-tender list and detail-page layout | Home-page rows observed; list/detail parsers tested on **synthetic** pages | Enable `gepnic_central`, run `sources test`, save a real page as a fixture |
+| CPPP `cpppdata` listing structure (columns, Tender ID format, pagination) | **BROKEN, live-verified 2026-10-29**: `eprocure.gov.in/cppp/` migrated to a client-rendered Vue SPA; the server-rendered `/latestactivetendersnew/cpppdata` path now 404s (`chanakya sources test -s cppp_central` fails with exactly that). Parsing logic below was correct for the 2026-10-10 structure but that structure is gone. | Reverse-engineer the SPA's `/cpppapi` REST endpoints (not attempted — needs separate authorization before sending unknown POST payloads to a government API), or add JS rendering |
+| CPPP `mmpdata` / `gemdata` share the same template | **Moot** — the whole CPPP site has moved to the SPA described above; not re-tested individually | — |
+| GePNIC active-tender list and detail-page layout | **LIVE-VERIFIED 2026-10-29**: `chanakya sources test` against `gepnic_assam`, `gepnic_mp`, `gepnic_kerala`, `gepnic_up`, `gepnic_rajasthan` — all 5 returned `OK`, 11 real records parsed each, from the current live portal (not fixtures) | Remaining GePNIC state portals not yet spot-checked; detail-page (`fetch_detail`) parser is still only tested on a synthetic fixture |
 | Documents require CAPTCHA on CPPP/GePNIC; GeM/IREPS need login | Observed / documented on the portals (doc 02) | — (no bypass will be attempted) |
 | Ollama Cloud API, auth, usage fields, no `format` in cloud | From docs.ollama.com (2026-10-10) | `chanakya llm check`; one dry run in cloud mode |
 | gpt-oss:20b / gpt-oss:120b available to the account and plan | **Unknown** — model pages could not be fetched in the build session | `chanakya llm check` lists visible models |

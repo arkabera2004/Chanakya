@@ -1,5 +1,16 @@
 """GeM-CPPP (Central Public Procurement Portal) connector.
 
+**BROKEN as of 2026-10-29 (live-verified):** ``eprocure.gov.in/cppp/`` now serves a
+client-rendered Vue SPA (a JS bundle + an empty ``#app`` div) instead of the server-rendered
+HTML this connector parses; ``/latestactivetendersnew/{feed}`` now returns HTTP 404.
+``chanakya sources test -s cppp_central`` fails with exactly that. The SPA's own REST API
+is served under ``/cpppapi`` (seen in its JS bundle) but its request/response shapes were
+not reverse-engineered this phase — doing so from unknown POST payloads against a
+government API needs a separate, explicitly authorized phase, not a blind-probing attempt.
+See docs/20_RISKS_AND_OPEN_QUESTIONS.md. Everything below this line describes the
+structure this connector was built and tested against (2026-10-10), which is no longer
+live — kept for the parsing logic and fixture tests, not as a claim of current portal shape.
+
 Verified on 2026-10-10 (see docs/02_GOVERNMENT_SOURCE_RESEARCH.md):
 - ``/cppp/latestactivetendersnew/{cpppdata|mmpdata}`` lists active tenders as
   server-rendered HTML, 10 rows per page, newest first, with no login and no
