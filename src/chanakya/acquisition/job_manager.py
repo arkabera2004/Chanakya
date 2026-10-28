@@ -55,6 +55,22 @@ class JobManager:
         # live in this process-local dict between create_job() and the thread that runs it.
         self._pending_extra: dict[str, dict] = {}
 
+    def update_provider_settings(self, provider_settings: AcquisitionProvidersSettings) -> None:
+        """Refresh the provider config this manager reads from — e.g. after the desk config
+        file (or its profile overlay) is reloaded — without rebuilding the thread pool/
+        semaphore that bounds concurrency across the process's whole lifetime."""
+        self._provider_settings = provider_settings
+
+    def update_session_factory(self, session_factory: sessionmaker[Session]) -> None:
+        """Refresh the session factory — e.g. the database URL changed between config
+        reloads — without rebuilding the thread pool/semaphore."""
+        self._session_factory = session_factory
+
+    def jobs_session(self) -> Session:
+        """A new Session for read-only inspection by callers outside this module (e.g. the
+        API layer listing/filtering jobs). Use as ``with jm.jobs_session() as session:``."""
+        return self._session_factory()
+
     def create_job(
         self, *, provider_id: str, url: str, source_id: str | None = None,
         capability: ProviderCapability = ProviderCapability.HTTP_FETCH, extra: dict | None = None,
