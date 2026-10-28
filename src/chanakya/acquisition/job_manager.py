@@ -54,6 +54,23 @@ class JobManager:
         # row — they can be arbitrary/unbounded and are only needed once, at run time — so they
         # live in this process-local dict between create_job() and the thread that runs it.
         self._pending_extra: dict[str, dict] = {}
+        self.recover_orphaned_jobs()
+
+    def recover_orphaned_jobs(self) -> int:
+        """A job left ``queued`` or ``running`` when the process last stopped has no live
+        thread behind it any more — nothing will ever finish it. Mark each one ``failed``
+        (retryable, so ``retry()`` can create a fresh job) rather than leaving it stuck
+        forever. Safe to call multiple times; only touches non-terminal rows. Returns the
+        number of jobs recovered."""
+        with self._session_factory() as session:
+            orphans = session.query(AcquisitionJob).filter(AcquisitionJob.status.in_(["queued", "running"])).all()
+            for job in orphans:
+                job.status, job.finished_at = "failed", now_utc()
+                job.error, job.retryable = "orphaned: no running process when the application restarted", True
+                _record_event(session, job.id, "failed", job.error)
+            if orphans:
+                session.commit()
+            return len(orphans)
 
     def update_provider_settings(self, provider_settings: AcquisitionProvidersSettings) -> None:
         """Refresh the provider config this manager reads from — e.g. after the desk config

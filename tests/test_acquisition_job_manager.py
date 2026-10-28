@@ -167,3 +167,37 @@ def test_retry_of_a_failed_retryable_job_creates_a_new_job(db, monkeypatch):
 
     new_job = jm.retry(job.id)
     assert new_job is not None and new_job.id != job.id
+
+
+def test_orphaned_running_job_is_recovered_on_manager_startup(db, monkeypatch):
+    """Simulates a process crash: a job stuck at 'running' with no live thread behind it,
+    then a fresh JobManager constructed against the same database (as a restarted process
+    would do) must mark it failed+retryable instead of leaving it stuck forever."""
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+    stub = _StubProvider(settings.scrapling)
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)
+
+    jm1 = JobManager(db, settings)
+    job = jm1.create_job(provider_id="scrapling", url="https://x/")
+    with db() as s:
+        row = s.get(AcquisitionJob, job.id)
+        row.status, row.started_at = "running", row.created_at
+        s.commit()  # simulate: the process died mid-run, this row never reached a terminal state
+
+    JobManager(db, settings)  # a fresh manager, as a restarted process would create
+    with db() as s:
+        row = s.get(AcquisitionJob, job.id)
+        assert row.status == "failed" and row.retryable is True
+        assert "restarted" in row.error
+        kinds = [e.kind for e in s.query(AcquisitionJobEvent).filter_by(job_id=job.id).order_by(AcquisitionJobEvent.id)]
+    assert kinds[-1] == "failed"
+    assert stub.calls == 0  # jm2 never actually ran the job — it only marked the orphan
+
+
+def test_recover_orphaned_jobs_is_a_no_op_with_nothing_stuck(db, monkeypatch):
+    jm, _ = _manager_with_stub(db, monkeypatch=monkeypatch)
+    assert jm.recover_orphaned_jobs() == 0
