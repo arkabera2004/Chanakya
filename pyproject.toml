@@ -37,6 +37,7 @@ dev = ["pytest>=8", "respx>=0.21", "reportlab>=4.0", "ruff>=0.6"]
 # and only activates when acquisition_providers.<name>.enabled is set in config.
 scrapling = ["scrapling>=0.5"]
 playwright = ["playwright>=1.64"]
+crawlee = ["crawlee>=1.0"]
 
 [project.scripts]
 chanakya = "chanakya.cli:app"
