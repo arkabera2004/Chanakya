@@ -23,6 +23,12 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 | 2026-10-28 | `cf70d81` | Unified job manager | `acquisition/job_manager.py` | 9 new; live-verified via real Firecrawl call |
 | 2026-10-28 | `93ed13c` | `/api/acquisition/*` FastAPI endpoints | `desk_acquisition.py`, `server.py` | 7 new (TestClient) |
 | 2026-10-28 | `21b82b5` | `/providers` frontend page | `web/src/app/providers/page.tsx`, `api-acquisition.ts`, `shell.tsx` | `npm run build` clean; manually verified against a real running backend in a real browser |
+| 2026-10-28 | `247e3e2` | Feature inventory, architecture, tool evaluation, log (first versions) | `docs/*.md` | n/a |
+| 2026-10-28 | `99fc00d` | Optional bearer-token auth for `/api/acquisition/*` | `config.py`, `desk_acquisition.py` | 3 new |
+| 2026-10-28 | `e5c26b4` | Orphaned queued/running job recovery on manager startup | `job_manager.py` | 2 new (simulated crash + no-op case) |
+| 2026-10-28 | `d18e9ed` | Pipeline integration tests (dedup, provenance, partial status) | `test_acquisition_pipeline_integration.py` | 3 new |
+| 2026-10-28 | `31f8039` | `/api/acquisition/analytics` endpoint | `desk_acquisition.py` | 2 new |
+| 2026-10-28 | `ff3faae` | Real operational-analytics panel on `/providers` | `providers/page.tsx`, `api-acquisition.ts` | `npm run build` clean; verified in a real browser against real backend data |
 
 ## Outstanding limitations (honest, as of the last commit above)
 
@@ -33,8 +39,19 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 - **Crawlee/Crawl4AI/Scrapy**: implemented and tested for the single-request case the shared
   contract needs; their multi-page orchestration/spider frameworks were not built (out of scope —
   no current source needs them; CPPP/GePNIC already have dedicated, working connectors).
-- **Frontend**: one page (`/providers`) covers provider status + job dashboard + job detail.
-  Dedicated extraction-review and operational-analytics screens were not built this phase.
+- **Frontend**: one page (`/providers`) covers provider status + job dashboard + job detail +
+  operational analytics (real data, `/api/acquisition/analytics`). A dedicated extraction-review
+  screen (per-record evidence/confidence review, distinct from the job-level diagnostics panel)
+  was still not built — no acquisition-sourced records with meaningful confidence/evidence data
+  exist yet to review in this session's test runs, so building that screen now would risk a
+  "page with nothing real to show" rather than a verified feature.
+- **Auth**: `/api/acquisition/*` now supports optional bearer-token auth
+  (`app.api_token_env`, commit `99fc00d`) — opt-in, so local dev is unaffected until a token is
+  configured. The rest of the desk API (`/api/opportunities`, `/api/brief`, etc.) is unchanged and
+  still has no auth; extending the same gate there was out of scope for this phase.
+- **Postgres parity**: not re-tested this phase (no Postgres instance available in this
+  environment); the new migration `08b63b59322d` was only verified against SQLite. Carried over
+  from `CRAWLING_RELIABILITY_BACKLOG.md#CRAWL-008`.
 - **Demo database migration**: `data/demo/chanakya_demo.db` required `chanakya db upgrade` after
   the new migration was added — found during the real local run, not a code defect, and resolved
   before the local verification above.

@@ -67,3 +67,15 @@ opportunities / raw_opportunities tables (unchanged schema)
   introducing infrastructure without a demonstrated requirement.
 - It does not wire any of the 9 providers into the CPPP/GePNIC source-scanning flow
   (`SourceConfig`/`TenderSourceConnector`) — that remains a separate, already-verified path.
+
+## Additions since the first version of this document
+
+- **Orphaned-job recovery** (`JobManager.recover_orphaned_jobs`, commit `e5c26b4`): a job stuck
+  at `queued`/`running` when the process stops (crash, deploy, restart) has no live thread behind
+  it. The manager now marks every such row `failed`+`retryable` on its own construction, so a
+  restarted process doesn't leave jobs stuck forever and `retry()` can create a fresh one.
+- **Optional auth** (`app.api_token_env`, commit `99fc00d`): a single FastAPI dependency gates
+  every `/api/acquisition/*` route when a token env var is configured; unset (the default)
+  preserves today's open-localhost desk behavior. This does not extend to the rest of the desk
+  API (`/api/opportunities`, `/api/brief`, ...), which remains unauthenticated — a decision for a
+  future phase if the desk is ever exposed beyond localhost.

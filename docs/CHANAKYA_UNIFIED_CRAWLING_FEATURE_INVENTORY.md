@@ -18,10 +18,10 @@ mocked or local) · `LIVE_VERIFIED` (at least one real call against the real pro
 | Provider contract (fetch/validate_config/is_configured, ok/blocked/failed classification) | `acquisition/contract.py` | TESTED | Exercised by every provider's test file |
 | Lazy-loading registry (missing package → clear problem, not a crash) | `acquisition/registry.py` | TESTED | `test_acquisition_*` files; live registry-status check during dev showed all 9 reporting correctly |
 | Provider settings (`acquisition_providers.*`, `api_key_env` pattern) | `config.py` | TESTED | `pyproject.toml` extras per provider; `settings.secret()` reused, redaction via `register_secret` |
-| Job manager (create/submit/cancel/retry, bounded thread pool, event history) | `acquisition/job_manager.py` | TESTED + LIVE_VERIFIED | 9 unit tests (`test_acquisition_job_manager.py`); live-verified end to end via the real Firecrawl provider during development (job reached `succeeded`, diagnostics persisted) |
+| Job manager (create/submit/cancel/retry, bounded thread pool, event history, orphaned-job recovery on restart) | `acquisition/job_manager.py` | TESTED + LIVE_VERIFIED | 11 unit tests; live-verified end to end via the real Firecrawl provider (job reached `succeeded`); recovery verified with a simulated-crash test (commit `e5c26b4`) |
 | DB persistence (`AcquisitionJob`, `AcquisitionJobEvent`) | `db.py`, migration `08b63b59322d` | TESTED | Migration applied cleanly from baseline on a disposable DB; `test_migrations.py`/`test_db_portability.py` unaffected; real demo DB upgraded and exercised via a running server (see below) |
-| API (`/api/acquisition/providers`, `/jobs`, `/jobs/{id}`, `/jobs/{id}/cancel`, `/jobs/{id}/retry`) | `desk_acquisition.py` | TESTED + LIVE_VERIFIED | 7 FastAPI TestClient tests; **also run against a real `chanakya serve` process** on the demo config (see below) |
-| Frontend (`/providers`) | `web/src/app/providers/page.tsx` | LIVE_VERIFIED | `npm run build` passes; manually exercised in a real Chrome tab against a real running backend — all 9 providers rendered with correct status/reasons, a real job's event history displayed correctly |
+| API (`/api/acquisition/providers`, `/jobs`, `/jobs/{id}`, `/jobs/{id}/cancel`, `/jobs/{id}/retry`, `/analytics`) | `desk_acquisition.py` | TESTED + LIVE_VERIFIED | 11 FastAPI TestClient tests; **also run against a real `chanakya serve` process**; optional bearer-token auth added (`app.api_token_env`, commit `99fc00d`), open by default |
+| Frontend (`/providers`) | `web/src/app/providers/page.tsx` | LIVE_VERIFIED | `npm run build` passes; manually exercised in a real Chrome tab against a real running backend — all 9 providers rendered with correct status/reasons, a real job's event history displayed correctly, and (commit `ff3faae`) real operational-analytics figures (succeeded/failed counts, avg/p95 duration) rendered with an honest "no finished job yet" state rather than a fabricated 0 |
 
 **Real local end-to-end run performed during this phase** (not simulated): started
 `chanakya serve` against `config/chanakya.demo.yaml` on port 8787, started `next dev` on port
@@ -104,6 +104,14 @@ migration system is designed to produce, not a defect.
 |---|---|
 | `/v1/extract` (httpResponseBody / browserHtml modes) | **BLOCKED_BY_CREDENTIALS** — no `ZYTE_API_KEY` was provided; implemented against Zyte's publicly documented schema, 6 tests pass against mocked responses only |
 | Auth/rate-limit classification | TESTED (mocked, schema not independently confirmed) |
+
+## Pipeline integration (proven, not just wired)
+
+| Claim | Status | Evidence |
+|---|---|---|
+| A provider's `TenderRecord`s reach `pipeline.store.upsert_record` | TESTED | `test_acquisition_pipeline_integration.py::test_a_successful_job_stores_a_real_opportunity_with_dedup_key` |
+| The same tender re-submitted through two separate jobs does not duplicate | TESTED | `...::test_resubmitting_the_same_tender_does_not_create_a_duplicate_opportunity` — proves the pipeline's own `dedup_key`, not job-level dedup, does the work |
+| A partial storage failure is distinguishable from full success | TESTED | `...::test_a_partial_job_is_distinguished_from_a_fully_succeeded_one` — job status `partial`, `diagnostics.stored.errors` accurate |
 
 ## Explicit scope boundaries (not gaps — deliberate decisions, recorded here per the brief)
 
