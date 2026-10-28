@@ -22,11 +22,14 @@ from ..contract import (
     ProviderCapability,
     ProviderConfigError,
 )
+from ..extraction import extract_by_selectors
 
 
 class PlaywrightProvider(AcquisitionProvider):
     provider_id = "playwright"
-    capabilities = frozenset({ProviderCapability.BROWSER_RENDER, ProviderCapability.HTTP_FETCH})
+    capabilities = frozenset({
+        ProviderCapability.BROWSER_RENDER, ProviderCapability.HTTP_FETCH, ProviderCapability.STRUCTURED_EXTRACTION,
+    })
     requires_credentials = False
 
     def __init__(self, settings: PlaywrightSettings) -> None:
@@ -107,9 +110,19 @@ class PlaywrightProvider(AcquisitionProvider):
                                 provider_id=self.provider_id, url=page.url, status="failed",
                                 error=f"HTTP {status_code}", retryable=status_code >= 500, diagnostics=diagnostics,
                             )
+                        records: list = []
+                        selectors: dict[str, str] = request.extra.get("selectors", {})
+                        if selectors:
+                            records, review = extract_by_selectors(
+                                html, selectors, source_id=request.source_id, url=page.url,
+                                platform=request.extra.get("platform", "playwright"), provider_id=self.provider_id,
+                            )
+                            diagnostics["extracted"] = review if review else (records[0].raw if records else {})
+                            if review:
+                                diagnostics["needs_review"] = review
                         return AcquisitionResult(
                             provider_id=self.provider_id, url=page.url, status="ok",
-                            raw_content=html, content_type="text/html", diagnostics=diagnostics,
+                            records=records, raw_content=html, content_type="text/html", diagnostics=diagnostics,
                         )
                     finally:
                         context.close()
