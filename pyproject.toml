@@ -38,6 +38,7 @@ dev = ["pytest>=8", "respx>=0.21", "reportlab>=4.0", "ruff>=0.6"]
 scrapling = ["scrapling>=0.5"]
 playwright = ["playwright>=1.64"]
 crawlee = ["crawlee>=1.0"]
+crawl4ai = ["crawl4ai>=0.9"]
 
 [project.scripts]
 chanakya = "chanakya.cli:app"
