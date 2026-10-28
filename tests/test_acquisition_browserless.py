@@ -44,6 +44,22 @@ def test_successful_render_returns_html_and_diagnostics():
     assert res.diagnostics["upstream_status"] == "ok"
 
 
+def test_selectors_extract_a_tender_record():
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, text='<html><body><h1 class="title">Supply of Widgets</h1><span class="org">Synthetic Dept</span></body></html>',
+            headers={"x-response-status": "ok", "x-response-code": "200", "x-response-url": "https://x/"},
+        )
+
+    client = httpx.Client(base_url="https://chrome.browserless.io", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"selectors": {"title": "h1.title", "organisation": "span.org"}})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "ok"
+    assert len(res.records) == 1
+    assert res.records[0].title == "Supply of Widgets"
+    assert res.records[0].organisation == "Synthetic Dept"
+
+
 def test_invalid_token_is_classified_blocked():
     def handler(req):
         return httpx.Response(401, text="unauthorized")

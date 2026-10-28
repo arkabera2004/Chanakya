@@ -16,11 +16,12 @@ import httpx
 
 from ...config import BrowserlessSettings, Settings
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability, ProviderConfigError
+from ..extraction import extract_by_selectors
 
 
 class BrowserlessProvider(AcquisitionProvider):
     provider_id = "browserless"
-    capabilities = frozenset({ProviderCapability.BROWSER_RENDER})
+    capabilities = frozenset({ProviderCapability.BROWSER_RENDER, ProviderCapability.STRUCTURED_EXTRACTION})
     requires_credentials = True
 
     def __init__(self, settings: BrowserlessSettings, *, secret_resolver=None) -> None:
@@ -82,14 +83,25 @@ class BrowserlessProvider(AcquisitionProvider):
                 )
 
             headers = resp.headers
+            diagnostics: dict = {
+                "upstream_status": headers.get("x-response-status"),
+                "upstream_http_code": headers.get("x-response-code"),
+                "deployment": headers.get("x-browserless-deployment"),
+            }
+            records: list = []
+            selectors: dict[str, str] = request.extra.get("selectors", {})
+            if selectors:
+                records, review = extract_by_selectors(
+                    resp.text, selectors, source_id=request.source_id,
+                    url=headers.get("x-response-url", request.url),
+                    platform=request.extra.get("platform", "browserless"), provider_id=self.provider_id,
+                )
+                diagnostics["extracted"] = review if review else (records[0].raw if records else {})
+                if review:
+                    diagnostics["needs_review"] = review
             return AcquisitionResult(
                 provider_id=self.provider_id, url=headers.get("x-response-url", request.url), status="ok",
-                raw_content=resp.text, content_type="text/html",
-                diagnostics={
-                    "upstream_status": headers.get("x-response-status"),
-                    "upstream_http_code": headers.get("x-response-code"),
-                    "deployment": headers.get("x-browserless-deployment"),
-                },
+                records=records, raw_content=resp.text, content_type="text/html", diagnostics=diagnostics,
             )
         finally:
             if owns_client:
