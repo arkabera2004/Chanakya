@@ -1,23 +1,31 @@
-"""Scrapling adapter: structured extraction via ``scrapling.Selector`` over HTML retrieved
-by Chanakya's own ``PoliteClient``.
+"""Scrapling adapter: structured extraction over HTML retrieved by Chanakya's own
+``PoliteClient``.
 
 shortcut: this adapter never imports ``scrapling.Fetcher``/``StealthyFetcher``. Those pull
 in ``curl_cffi`` and, transitively, ``patchright`` — a stealth fork of Playwright built to
 evade bot detection, which conflicts with this project's explicit no-stealth-automation rule
-(see docs/CHANAKYA_UNIFIED_CRAWLING_FEATURE_INVENTORY.md). ``scrapling.Selector`` is a pure
-parsing/selection class with no such dependency, so retrieval stays on the already
-SSRF-protected, robots.txt-respecting ``PoliteClient`` and only selection/extraction comes
-from Scrapling. Upgrade path: if a future source genuinely requires Scrapling's own fetch
-layer, re-evaluate after confirming ``curl_cffi`` alone (without enabling any stealth option)
-is acceptable — do not enable ``StealthyFetcher`` under any circumstance.
+(see docs/CHANAKYA_UNIFIED_CRAWLING_FEATURE_INVENTORY.md). Retrieval stays on the already
+SSRF-protected, robots.txt-respecting ``PoliteClient``. Upgrade path: if a future source
+genuinely requires Scrapling's own fetch layer, re-evaluate after confirming ``curl_cffi``
+alone (without enabling any stealth option) is acceptable — do not enable ``StealthyFetcher``
+under any circumstance.
+
+Field extraction itself now uses the shared ``acquisition.extraction.extract_by_selectors``
+helper (BeautifulSoup-based) instead of ``scrapling.Selector`` directly — a plain CSS-selector
+field map exercises none of Scrapling's distinguishing adaptive-selector capability either
+way, so sharing one implementation with every other HTML-returning provider (Crawlee, Scrapy,
+Playwright, Browserless, Zyte) was a strictly better trade than keeping six near-duplicate
+copies. ``scrapling`` itself is still a required, checked dependency — ``is_configured()``
+gates this provider on it being installed, consistent with every other provider's package
+check — it is simply no longer imported inside ``fetch()``.
 """
 
 from __future__ import annotations
 
 from ...config import ScraplingSettings
 from ...http import BlockedError, FetchError, PoliteClient
-from ...models import TenderRecord
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability
+from ..extraction import extract_by_selectors
 
 
 class ScraplingProvider(AcquisitionProvider):
@@ -47,8 +55,6 @@ class ScraplingProvider(AcquisitionProvider):
         return []
 
     def fetch(self, request: AcquisitionRequest, *, client: PoliteClient | None = None) -> AcquisitionResult:
-        from scrapling import Selector
-
         owns_client = client is None
         if client is None:
             from ...config import HttpSettings
@@ -76,34 +82,11 @@ class ScraplingProvider(AcquisitionProvider):
                     diagnostics={"note": "no selector map given; returning raw content only"},
                 )
 
-            sel = Selector(html)
-            extracted: dict[str, str | None] = {}
-            for field_name, css in selectors.items():
-                matches = sel.css(css)
-                extracted[field_name] = matches[0].text.strip() if matches else None
-
-            records: list[TenderRecord] = []
-            review: dict[str, str | None] = {}
-            if extracted.get("title"):
-                records.append(
-                    TenderRecord(
-                        source_id=request.source_id,
-                        platform=request.extra.get("platform", "scrapling"),
-                        source_record_key=extracted.get("tender_id") or request.url,
-                        source_tender_id=extracted.get("tender_id"),
-                        ref_no=extracted.get("ref_no"),
-                        title=extracted["title"],
-                        organisation=extracted.get("organisation"),
-                        detail_url=request.url,
-                        evidence=f"Scrapling selector extraction of {request.url}",
-                        raw=extracted,
-                    )
-                )
-            else:
-                # No title extracted: do not guess. Keep the evidence for manual review
-                # instead of silently discarding or inventing a record (per the adaptive-
-                # selector validation rule in the unified-crawling brief).
-                review = extracted
+            records, review = extract_by_selectors(
+                html, selectors, source_id=request.source_id, url=request.url,
+                platform=request.extra.get("platform", "scrapling"), provider_id=self.provider_id,
+            )
+            extracted = review if review else (records[0].raw if records else {})
 
             return AcquisitionResult(
                 provider_id=self.provider_id, url=final_url, status="ok",
