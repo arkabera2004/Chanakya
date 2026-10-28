@@ -42,6 +42,22 @@ def test_http_response_body_is_base64_decoded():
     assert res.diagnostics["status_code"] == 200
 
 
+def test_selectors_extract_a_tender_record():
+    html = '<html><body><h1 class="title">Supply of Widgets</h1><span class="org">Synthetic Dept</span></body></html>'
+    body_b64 = base64.b64encode(html.encode()).decode()
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"url": "https://x/", "statusCode": 200, "httpResponseBody": body_b64})
+
+    client = httpx.Client(base_url="https://api.zyte.com/v1", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"selectors": {"title": "h1.title", "organisation": "span.org"}})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "ok"
+    assert len(res.records) == 1
+    assert res.records[0].title == "Supply of Widgets"
+    assert res.records[0].organisation == "Synthetic Dept"
+
+
 def test_browser_render_mode_requests_browser_html():
     def handler(req: httpx.Request) -> httpx.Response:
         import json

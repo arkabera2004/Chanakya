@@ -17,6 +17,7 @@ import httpx
 
 from ...config import Settings, ZyteSettings
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability, ProviderConfigError
+from ..extraction import extract_by_selectors
 
 
 class ZyteProvider(AcquisitionProvider):
@@ -87,10 +88,21 @@ class ZyteProvider(AcquisitionProvider):
                 encoded = data.get("httpResponseBody")
                 html = base64.b64decode(encoded).decode("utf-8", errors="replace") if encoded else None
 
+            records: list = []
+            diagnostics: dict = {"status_code": data.get("statusCode")}
+            selectors: dict[str, str] = request.extra.get("selectors", {})
+            if selectors and html:
+                records, review = extract_by_selectors(
+                    html, selectors, source_id=request.source_id, url=data.get("url", request.url),
+                    platform=request.extra.get("platform", "zyte"), provider_id=self.provider_id,
+                )
+                diagnostics["extracted"] = review if review else (records[0].raw if records else {})
+                if review:
+                    diagnostics["needs_review"] = review
+
             return AcquisitionResult(
                 provider_id=self.provider_id, url=data.get("url", request.url), status="ok",
-                raw_content=html, content_type="text/html",
-                diagnostics={"status_code": data.get("statusCode")},
+                records=records, raw_content=html, content_type="text/html", diagnostics=diagnostics,
             )
         finally:
             if owns_client:
