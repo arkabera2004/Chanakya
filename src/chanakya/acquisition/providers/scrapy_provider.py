@@ -25,11 +25,14 @@ from pathlib import Path
 
 from ...config import ScrapySettings
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability
+from ..extraction import extract_by_selectors
 
 
 class ScrapyProvider(AcquisitionProvider):
     provider_id = "scrapy"
-    capabilities = frozenset({ProviderCapability.HTTP_FETCH, ProviderCapability.LINK_DISCOVERY})
+    capabilities = frozenset({
+        ProviderCapability.HTTP_FETCH, ProviderCapability.LINK_DISCOVERY, ProviderCapability.STRUCTURED_EXTRACTION,
+    })
     requires_credentials = False
 
     def __init__(self, settings: ScrapySettings) -> None:
@@ -78,9 +81,21 @@ class ScrapyProvider(AcquisitionProvider):
 
             outcome = json.loads(out_path.read_text(encoding="utf-8"))
 
+        records: list = []
+        diagnostics: dict = {"status_code": outcome.get("status_code")}
+        selectors: dict[str, str] = request.extra.get("selectors", {})
+        if outcome["status"] == "ok" and selectors and outcome.get("body"):
+            records, review = extract_by_selectors(
+                outcome["body"], selectors, source_id=request.source_id, url=outcome.get("url", request.url),
+                platform=request.extra.get("platform", "scrapy"), provider_id=self.provider_id,
+            )
+            diagnostics["extracted"] = review if review else (records[0].raw if records else {})
+            if review:
+                diagnostics["needs_review"] = review
+
         return AcquisitionResult(
             provider_id=self.provider_id, url=outcome.get("url", request.url), status=outcome["status"],
-            raw_content=outcome.get("body"), content_type=outcome.get("content_type"),
+            records=records, raw_content=outcome.get("body"), content_type=outcome.get("content_type"),
             error=outcome.get("error"), retryable=outcome.get("retryable", False),
-            diagnostics={"status_code": outcome.get("status_code")},
+            diagnostics=diagnostics,
         )
