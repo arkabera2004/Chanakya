@@ -14,6 +14,8 @@ from chanakya.config import AcquisitionProvidersSettings, ScraplingSettings
 from chanakya.db import AcquisitionJob, Opportunity, init_db, make_engine, session_factory
 from chanakya.models import TenderRecord
 
+from .dbsupport import isolated_database
+
 
 def _record(**overrides) -> TenderRecord:
     base = dict(
@@ -42,9 +44,11 @@ class _RecordingProvider(AcquisitionProvider):
 
 @pytest.fixture
 def db(tmp_path):
-    engine = make_engine(f"sqlite:///{tmp_path / 'jobs.db'}")
-    init_db(engine)
-    return session_factory(engine)
+    """SQLite by default; a real Postgres schema when CHANAKYA_TEST_DATABASE_URL is set."""
+    with isolated_database(tmp_path) as url:
+        engine = make_engine(url)
+        init_db(engine)
+        yield session_factory(engine)
 
 
 def _manager(sf, records: list[TenderRecord], monkeypatch) -> JobManager:

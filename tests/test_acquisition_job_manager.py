@@ -18,6 +18,8 @@ from chanakya.acquisition.registry import ProviderRegistry
 from chanakya.config import AcquisitionProvidersSettings, ScraplingSettings
 from chanakya.db import AcquisitionJob, AcquisitionJobEvent, init_db, make_engine, session_factory
 
+from .dbsupport import isolated_database
+
 
 class _StubProvider(AcquisitionProvider):
     provider_id = "scrapling"  # reuse a real settings slot so AcquisitionProvidersSettings validates
@@ -41,9 +43,13 @@ class _StubProvider(AcquisitionProvider):
 
 @pytest.fixture
 def db(tmp_path):
-    engine = make_engine(f"sqlite:///{tmp_path / 'jobs.db'}")
-    init_db(engine)
-    return session_factory(engine)
+    """SQLite by default; a real Postgres schema when CHANAKYA_TEST_DATABASE_URL is set
+    (see tests/dbsupport.py) — same convention every other test file uses, so the job
+    manager's own tests get Postgres parity coverage too, not just the connector tests."""
+    with isolated_database(tmp_path) as url:
+        engine = make_engine(url)
+        init_db(engine)
+        yield session_factory(engine)
 
 
 def _manager_with_stub(sf, outcomes=None, *, monkeypatch=None) -> tuple[JobManager, _StubProvider]:
