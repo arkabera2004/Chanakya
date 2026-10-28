@@ -7,9 +7,9 @@ config per request; see server.desk_settings).
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel
 
 from . import server
@@ -19,20 +19,9 @@ from .acquisition.job_manager import JobManager
 from .config import Settings
 from .db import AcquisitionJob, AcquisitionJobEvent, init_db, make_engine, session_factory
 
-
-def require_api_token(authorization: Annotated[str | None, Header()] = None) -> None:
-    """Bearer-token gate for every /api/acquisition/* route. A no-op (today's open-localhost
-    behavior) when app.api_token_env is unset; once set, a missing/wrong token is a 401."""
-    settings = server.desk_settings()
-    expected = settings.secret(settings.app.api_token_env) if settings.app.api_token_env else None
-    if not expected:
-        return
-    provided = authorization.removeprefix("Bearer ").strip() if authorization and authorization.startswith("Bearer ") else None
-    if provided != expected:
-        raise HTTPException(401, "missing or invalid acquisition API token")
-
-
-router = APIRouter(dependencies=[Depends(require_api_token)])
+# Auth: server.create_app() applies server.require_desk_auth to every route app-wide
+# (including this router), so there is no separate gate here any more.
+router = APIRouter()
 
 _job_manager: JobManager | None = None
 

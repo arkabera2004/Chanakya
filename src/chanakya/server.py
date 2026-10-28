@@ -18,9 +18,9 @@ import threading
 import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable
+from typing import Annotated, Any, Callable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -59,6 +59,28 @@ def desk_settings() -> Settings:
     """The config the desk reads and writes. ``CHANAKYA_CONFIG`` wins over the project default."""
     override = os.environ.get("CHANAKYA_CONFIG")
     return load_settings(override or project_root() / "config" / "chanakya.yaml")
+
+
+# Paths that stay open even when app.api_token_env is set: a health check must work without a
+# credential, or a load balancer / uptime monitor configured without one can never pass.
+_AUTH_EXEMPT_PATHS = frozenset({"/api/health"})
+
+
+def require_desk_auth(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:
+    """App-wide bearer-token gate. A no-op (today's open-localhost behavior) when
+    app.api_token_env is unset; once set, every route except the health check requires
+    Authorization: Bearer <token>. This supersedes desk_acquisition.py's own narrower gate —
+    both exist for defense in depth, but this one is what actually protects the rest of the
+    desk API (opportunities, brief, documents, profile, insights, ...)."""
+    if request.url.path in _AUTH_EXEMPT_PATHS:
+        return
+    settings = desk_settings()
+    expected = settings.secret(settings.app.api_token_env) if settings.app.api_token_env else None
+    if not expected:
+        return
+    provided = authorization.removeprefix("Bearer ").strip() if authorization and authorization.startswith("Bearer ") else None
+    if provided != expected:
+        raise HTTPException(401, "missing or invalid API token")
 
 
 def is_demo(settings: Settings) -> bool:
@@ -645,7 +667,7 @@ def _model_answer(settings: Settings, message: str, brief: dict[str, Any]) -> st
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Chanakya desk", version="0.1.0")
+    app = FastAPI(title="Chanakya desk", version="0.1.0", dependencies=[Depends(require_desk_auth)])
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
