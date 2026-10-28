@@ -36,10 +36,14 @@ class AppSettings(_Strict):
     documents_dir: Path = Path("./data/documents")
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"  # env CHANAKYA_LOG_FORMAT overrides (see obs.py)
-    # Bearer-token auth for the acquisition API (desk_acquisition.py). Unset (the default)
+    # Bearer-token auth for the whole desk API (server.require_desk_auth). Unset (the default)
     # preserves today's open-localhost desk behavior; set this to an env var name holding a
     # real token before exposing the desk beyond localhost.
     api_token_env: str | None = None
+    # Origins the desk API accepts cross-origin requests from. The default covers the two local
+    # dev addresses next's dev server binds to; override with the real frontend origin(s) before
+    # exposing the desk beyond localhost — never widen this to "*" for a token-protected desk.
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"])
 
 
 class HttpSettings(_Strict):

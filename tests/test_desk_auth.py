@@ -42,6 +42,18 @@ def test_configured_token_protects_brief_and_opportunities(desk, monkeypatch):
         assert client.get("/api/opportunities", headers={"Authorization": "Bearer s3cret"}).status_code == 200
 
 
+def test_cors_origins_are_configurable_and_default_to_localhost(desk):
+    assert desk.app.cors_origins == ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+    desk.app.cors_origins = ["https://desk.example.com"]
+    with TestClient(create_app()) as client:
+        allowed = client.get("/api/health", headers={"Origin": "https://desk.example.com"})
+        assert allowed.headers.get("access-control-allow-origin") == "https://desk.example.com"
+
+        disallowed = client.get("/api/health", headers={"Origin": "https://evil.example.com"})
+        assert "access-control-allow-origin" not in disallowed.headers
+
+
 def test_configured_token_also_protects_acquisition_routes(desk, monkeypatch):
     """Confirms the single app-wide gate covers desk_acquisition.py too, now that its own
     router-level gate was removed in favor of this one (no regression from that change)."""

@@ -670,7 +670,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Chanakya desk", version="0.1.0", dependencies=[Depends(require_desk_auth)])
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_origins=desk_settings().app.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
