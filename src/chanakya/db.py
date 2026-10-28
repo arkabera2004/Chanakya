@@ -88,6 +88,43 @@ class SourceScanRun(Base):
     coverage_note: Mapped[str | None] = mapped_column(Text)
 
 
+class AcquisitionJob(Base):
+    """One acquisition-provider request (see ``chanakya.acquisition``). Distinct from
+    ``ScanRun``/``SourceScanRun``, which track a connector-based multi-source scan: a job is
+    the unit the provider dashboard and job manager operate on — one provider, one URL, one
+    outcome — and may or may not be part of a larger ``ScanRun``."""
+
+    __tablename__ = "acquisition_jobs"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider_id: Mapped[str] = mapped_column(String(40), index=True)
+    source_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    url: Mapped[str] = mapped_column(String(2000))
+    capability: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    # queued|running|succeeded|partial|failed|cancelled
+    scan_run_id: Mapped[str | None] = mapped_column(ForeignKey("scan_runs.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=1)
+    retryable: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    record_count: Mapped[int] = mapped_column(Integer, default=0)
+    diagnostics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AcquisitionJobEvent(Base):
+    __tablename__ = "acquisition_job_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("acquisition_jobs.id"), index=True)
+    at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    kind: Mapped[str] = mapped_column(String(30))  # created|started|retrying|succeeded|failed|blocked|cancelled
+    message: Mapped[str] = mapped_column(Text, default="")
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
 class RawOpportunity(Base):
     __tablename__ = "raw_opportunities"
     __table_args__ = (UniqueConstraint("source_id", "source_record_key", "content_hash"),)
