@@ -159,6 +159,23 @@ def test_retry_backoff_is_jittered_and_bounded(db, monkeypatch):
     assert sleeps and all(0 <= s <= 10 for s in sleeps)
 
 
+def test_a_200_ok_captcha_page_is_reclassified_as_blocked(db, monkeypatch):
+    """A provider can get a clean 200 whose body is a CAPTCHA challenge, not real content —
+    the job manager must not report this as a successful acquisition."""
+    jm, stub = _manager_with_stub(db, monkeypatch=monkeypatch, outcomes=[
+        AcquisitionResult(
+            provider_id="scrapling", url="https://x/", status="ok",
+            raw_content='<html><body><img alt="captcha" src="/captcha.png"></body></html>',
+            content_type="text/html",
+        ),
+    ])
+    job = jm.create_job(provider_id="scrapling", url="https://x/")
+    jm.submit(job.id)
+    row = _wait_terminal(db, job.id)
+    assert row.status == "failed" and row.retryable is False
+    assert row.diagnostics["blocked_reason"] == "captcha_in_body"
+
+
 def test_blocked_result_is_never_retried(db, monkeypatch):
     jm, stub = _manager_with_stub(db, monkeypatch=monkeypatch, outcomes=[
         AcquisitionResult(provider_id="scrapling", url="https://x/", status="blocked", error="captcha"),

@@ -9,15 +9,18 @@ is pushed) status via the DB row.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import random
 import threading
 import time
 import uuid
 
+from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..config import AcquisitionProvidersSettings
+from ..connectors.base import has_captcha
 from ..db import AcquisitionJob, AcquisitionJobEvent
 from ..timeutil import now_utc
 from .contract import AcquisitionRequest, ProviderCapability
@@ -26,6 +29,24 @@ from .registry import registry
 logger = logging.getLogger("chanakya.acquisition.job_manager")
 
 _TERMINAL_STATUSES = {"succeeded", "partial", "failed", "cancelled"}
+
+
+def _reclassify_captcha_pages(result):
+    """A provider can get a clean HTTP 200 whose body is a CAPTCHA/access-restriction
+    challenge page, not the real content — status-code-only blocked detection (401/403)
+    misses this entirely. Reuses the same ``has_captcha`` heuristic the CPPP/GePNIC
+    connectors already rely on, applied once here instead of duplicated in every
+    HTML-returning provider. Never claim a page was successfully acquired when it wasn't."""
+    if result.status != "ok" or result.content_type != "text/html" or not result.raw_content:
+        return result
+    if has_captcha(BeautifulSoup(result.raw_content, "lxml")):
+        return dataclasses.replace(
+            result, status="blocked", records=[],
+            error="CAPTCHA or access-restriction content detected in a 200 OK response",
+            retryable=False,
+            diagnostics={**result.diagnostics, "blocked_reason": "captcha_in_body"},
+        )
+    return result
 
 
 def _new_job_id() -> str:
@@ -178,7 +199,7 @@ class JobManager:
         attempt = 1
         while True:
             try:
-                result = provider.fetch(request)
+                result = _reclassify_captcha_pages(provider.fetch(request))
             except Exception as exc:  # a provider bug, not an expected ok/blocked/failed outcome
                 logger.exception("acquisition job %s: provider %s raised unexpectedly", job_id, provider_id)
                 with self._session_factory() as session:
