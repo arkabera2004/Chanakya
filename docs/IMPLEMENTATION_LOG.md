@@ -35,25 +35,37 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 | 2026-10-29 | `7065002` | App-wide bearer-token auth (was acquisition-only) | `server.py`, `desk_acquisition.py` | 4 new; live-verified against a real running server |
 | 2026-10-29 | `c3808cc` | Configurable CORS origins (`app.cors_origins`) | `config.py`, `server.py` | 1 new, real CORS-header assertion |
 | 2026-10-29 | `8cc753f` | Production-mode startup fails fast without an auth token | `config.py`, `server.py` | 5 new; live-verified against a real server (crash on missing token, 200/401/200 with one configured) |
+| 2026-10-29 | `d885e17` | **FIXED**: root-caused and closed the intermittent `test_followup_alerts` failure | `tests/conftest.py`, `tests/test_followup_alerts.py` | 5× consecutive full-suite runs: 0 failures (previously ~1/7-8); also verified against real Postgres 17 |
 
-## KNOWN DEFECT found during this phase's verification (not fixed, root-caused)
+## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
-`tests/test_followup_alerts.py::test_a_run_sends_the_follow_up_alerts_only_when_they_are_switched_on`
-failed intermittently (1 of ~8 full-suite runs observed; 100% pass in isolation and in 7 of 8 full
-runs) during unrelated verification work (Priority D, commit `8cc753f`). **Confirmed unrelated to
-this session's changes** — it touches `reporting/followups.py`/email-alert state, not
-auth/config/acquisition code.
+**Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
+`now_ist()` fresh on every invocation. `test_a_run_sends_the_follow_up_alerts_only_when_they_are_switched_on`
+calls `sample_records()` (via `rescan()`) four times; `ist()`'s format
+(`"%d-%b-%Y %I:%M %p"`) has no seconds, so two calls straddling a real wall-clock minute
+boundary produced HELPLINE's `closing_at` a minute apart. `diff_changes` correctly treats that as
+a genuine `deadline_changed` event (`ALERT_CHANGE_TYPES` includes it), competing for delivery
+alongside the test's real `emd_inr` change and causing the extra sends on the final rescan.
 
-Root cause (evidence, not guessed): the failing assertion is `again.corrigendum_alerts_sent == 0`
-on a *third* `rescan(..., email=True)` call, which instead sent 4 (expected 0 — the alert should
-already be marked delivered from the second call). `pending_corrigendum_alerts` dedupes by
-`idempotency_key(..., f"change:{event.id}", recipient)` — keyed to a specific `ChangeEvent` row id,
-not a timestamp. The intermittent resend therefore most likely means the third rescan sometimes
-produces **new** `ChangeEvent` rows (new ids) for the same underlying diff, rather than reusing the
-ones already delivered against — i.e., a non-determinism in change detection itself, not in the
-alert-dedup logic. Not fixed here: confirming that hypothesis requires instrumenting
-`diff_changes`/`upsert_record` across repeated identical rescans, which is a focused investigation
-in its own right, not a safe blind fix under time pressure for an unrelated subsystem.
+**This was a test-fixture determinism bug, not a defect in `pipeline/store.py` or
+`reporting/followups.py`** — their change-detection and idempotency logic were already correct.
+Proven two ways: (1) forcing a one-minute jump between two `rescan()` calls reproduced the exact
+"4 alerts instead of 0" failure on demand; (2) after the fix, the same forced-drift scenario
+(now advancing a full minute on *every* `now_ist()` call throughout the whole test) passes.
+
+**Fix** (commit `d885e17`): a new `tests/conftest.py::_freeze_relative_dates` autouse fixture
+captures one reference instant per test before the test body runs; `ist()` uses that frozen
+instant instead of calling `now_ist()` again, so repeated fixture-date generation within one test
+is always identical regardless of real elapsed wall-clock time.
+
+**Regression coverage kept permanently:**
+`test_repeated_rescans_are_stable_across_real_clock_drift` in `test_followup_alerts.py` — not a
+throwaway repro, it stays in the suite forcing aggressive clock drift and asserting the original
+bug's exact assertions still hold.
+
+**Verification:** `test_followup_alerts.py` 13/13 (was 12 — new regression test). Full suite run 5
+times consecutively: 418 passed / 5 skipped / 0 failed, every time. Also run against a real
+`postgres:17-alpine` container: 421 passed / 2 skipped (unrelated) / 0 failed.
 
 ## Outstanding limitations (honest, as of the last commit above)
 
