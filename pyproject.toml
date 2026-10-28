@@ -39,6 +39,7 @@ scrapling = ["scrapling>=0.5"]
 playwright = ["playwright>=1.64"]
 crawlee = ["crawlee>=1.0"]
 crawl4ai = ["crawl4ai>=0.9"]
+scrapy = ["scrapy>=2.19"]
 
 [project.scripts]
 chanakya = "chanakya.cli:app"
