@@ -10,6 +10,7 @@ is pushed) status via the DB row.
 from __future__ import annotations
 
 import logging
+import random
 import threading
 import time
 import uuid
@@ -226,7 +227,9 @@ class JobManager:
                     session.commit()
                     return
             attempt += 1
-            self._sleep(min(2 ** attempt, 10))
+            # Full jitter (AWS-style): uniform(0, backoff) avoids synchronized retry storms
+            # across jobs when a provider is overloaded.
+            self._sleep(random.uniform(0, min(2 ** attempt, 10)))
 
     def _store_records(self, session: Session, result, source_id: str | None) -> dict:
         from ..pipeline import store

@@ -135,6 +135,30 @@ def test_non_retryable_failure_stops_after_one_attempt(db, monkeypatch):
     assert row.status == "failed" and stub.calls == 1
 
 
+def test_retry_backoff_is_jittered_and_bounded(db, monkeypatch):
+    """Full-jitter backoff (uniform(0, 2**attempt capped at 10)) avoids retry storms across
+    jobs when a provider is overloaded — assert the sleep durations are bounded and not a
+    fixed constant, rather than re-asserting the exact formula."""
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+    stub = _StubProvider(settings.scrapling, outcomes=[
+        AcquisitionResult(provider_id="scrapling", url="https://x/", status="failed", error="transient", retryable=True),
+        AcquisitionResult(provider_id="scrapling", url="https://x/", status="ok"),
+    ])
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)
+    sleeps: list[float] = []
+    jm = JobManager(db, settings, max_attempts=3, sleep=sleeps.append)
+
+    job = jm.create_job(provider_id="scrapling", url="https://x/")
+    jm.submit(job.id)
+    _wait_terminal(db, job.id)
+
+    assert sleeps and all(0 <= s <= 10 for s in sleeps)
+
+
 def test_blocked_result_is_never_retried(db, monkeypatch):
     jm, stub = _manager_with_stub(db, monkeypatch=monkeypatch, outcomes=[
         AcquisitionResult(provider_id="scrapling", url="https://x/", status="blocked", error="captcha"),
