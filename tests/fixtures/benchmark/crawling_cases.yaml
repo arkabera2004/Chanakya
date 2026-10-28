@@ -1,0 +1,58 @@
+# Ground-truth manifest for the deterministic crawling-reliability benchmark
+# (tests/test_crawling_benchmark.py). Every case points at an existing, already-committed
+# fixture under tests/fixtures/html/ rather than duplicating it — the expected values here are
+# copied from the assertions already proven by tests/test_connectors.py and tests/test_awards.py,
+# not invented. `origin: real` fixtures are trimmed captures of a live portal page (see the
+# provenance header inside the fixture file itself); `origin: synthetic` fixtures are
+# hand-written and labelled as such in the fixture and never represent a real tender/award.
+#
+# `outcome` is one of: extracted | blocked | structure_changed | empty.
+cases:
+  - id: CPPP-VALID-001
+    origin: real
+    fixture: html/cppp_central_p1.cppp.html
+    connector: cppp
+    outcome: extracted
+    expected_record_count: 10
+    required_fields: [source_tender_id, title, organisation, closing_at]
+
+  - id: GEPNIC-HOME-VALID-001
+    origin: synthetic
+    fixture: html/gepnic_active.gepnic.html
+    connector: gepnic
+    outcome: extracted
+    expected_record_count: 3
+    required_fields: [source_tender_id, title, organisation, closing_at]
+
+  - id: GEPNIC-HOME-VALID-002
+    origin: real
+    fixture: html/gepnic_home.gepnic.html
+    connector: gepnic
+    outcome: extracted
+    expected_record_count: 4
+    required_fields: [title, ref_no, closing_at]
+
+  - id: CPPP-CAPTCHA-BLOCKED-001
+    origin: real
+    fixture: html/cppp_results_captcha_form.real.html
+    connector: cppp
+    outcome: blocked
+
+  - id: AWARDS-CAPTCHA-BLOCKED-001
+    origin: real
+    fixture: html/cppp_results_captcha_form.real.html
+    connector: cppp_awards
+    outcome: blocked
+
+  - id: AWARDS-SYNTHETIC-VALID-001
+    origin: synthetic
+    fixture: html/cppp_awards_results.synthetic.html
+    connector: cppp_awards
+    outcome: extracted
+    expected_record_count: 6
+    required_fields: [tender_id, organisation, awarded_to]
+    # award_date/awarded_value_inr are legitimately None for some rows (see
+    # tests/test_awards.py::test_unstated_value_and_date_stay_none) — not required here.
+    note: "cppp_awards is verification_status=candidate: the live results page is CAPTCHA-gated
+           (see AWARDS-CAPTCHA-BLOCKED-001), so this case can only prove the parser is correct
+           against a hand-built page shape, not that the live page ever looks like this."
