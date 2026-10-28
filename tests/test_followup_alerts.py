@@ -287,3 +287,40 @@ def test_the_email_command_sends_each_follow_up_alert_without_a_scan(settings, s
         assert second.exit_code == 0 and nothing in second.output
     assert runner.invoke(cli.app, ["email", "--kind", "nonsense"]).exit_code == 1
     assert {read(f)["X-Chanakya-Kind"] for f in outbox(settings)} == {"corrigendum_alert", "deadline_alert"}
+
+
+
+def test_repeated_rescans_are_stable_across_real_clock_drift(settings, session, monkeypatch):
+    """Regression test for a real, confirmed intermittent failure: ist() used to call
+    now_ist() fresh on every invocation, so a test calling sample_records() multiple times
+    (every rescan() here does) could see HELPLINE's closing_at shift by a minute if the test
+    straddled a real wall-clock minute boundary — ist()'s format has no seconds. diff_changes
+    then correctly treated that drift as a genuine deadline_changed event, causing a spurious
+    extra corrigendum alert. Root-caused by directly reproducing it (forcing a one-minute jump
+    between rescan() calls reproduced the exact "4 alerts instead of 0" failure); fixed by
+    conftest.py's _freeze_relative_dates autouse fixture, which this test proves holds even
+    under aggressive repeated drift, not just the no-drift happy path the other tests exercise."""
+    import chanakya.timeutil as timeutil_mod
+    from datetime import timedelta
+    real_now_ist = timeutil_mod.now_ist
+    calls = {"n": 0}
+
+    def fake_now_ist():
+        calls["n"] += 1
+        return real_now_ist() + timedelta(minutes=calls["n"])
+
+    # Patch now_ist itself (what the autouse fixture calls) to prove the test survives drift
+    # occurring *after* its frozen instant was captured at test start.
+    monkeypatch.setattr(timeutil_mod, "now_ist", fake_now_ist)
+
+    scored(settings, session, shortlist=(HELPLINE,))
+    quiet = rescan(settings, session, {HELPLINE: {"emd_inr": 75000}}, email=True)
+    assert quiet.corrigendum_alerts_sent == 0
+
+    settings.email.alert_on_corrigendum = True
+    settings.email.alert_on_deadline = True
+    rescan(settings, session, {HELPLINE: {"emd_inr": 75000}}, dry_run=True)
+    loud = rescan(settings, session, {HELPLINE: {"emd_inr": 75000}}, email=True)
+    assert loud.corrigendum_alerts_sent == 2
+    again = rescan(settings, session, {HELPLINE: {"emd_inr": 75000}}, email=True)
+    assert again.corrigendum_alerts_sent == 0

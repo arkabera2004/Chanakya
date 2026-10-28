@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -17,9 +17,36 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
 
 
+_frozen_now: datetime | None = None  # set per-test by _freeze_relative_dates below
+
+
 def ist(days: float = 0, hours: float = 0) -> str:
-    """Portal-style IST timestamp relative to now (keeps tests date-independent)."""
-    return (now_ist() + timedelta(days=days, hours=hours)).strftime("%d-%b-%Y %I:%M %p")
+    """Portal-style IST timestamp relative to now (keeps tests date-independent).
+
+    Uses the per-test frozen instant (see ``_freeze_relative_dates``) when one is active, so
+    repeated calls within the same test — e.g. test_followup_alerts.py calling
+    ``sample_records()`` on every ``rescan()`` — always produce the identical string. Before
+    this fix, two calls to ``ist()`` straddling a real wall-clock minute boundary (this format
+    has no seconds) could disagree by a minute, which ``diff_changes`` correctly treats as a
+    genuine ``deadline_changed`` event — a spurious change from the test's own clock drift, not
+    a production defect. Reproduced directly: forcing a one-minute jump between two rescan()
+    calls reproduced the exact "4 alerts instead of 0" failure this was causing intermittently.
+    """
+    base = _frozen_now if _frozen_now is not None else now_ist()
+    return (base + timedelta(days=days, hours=hours)).strftime("%d-%b-%Y %I:%M %p")
+
+
+@pytest.fixture(autouse=True)
+def _freeze_relative_dates():
+    """Every test gets one stable reference instant for ``ist()``, so fixture dates never
+    drift mid-test regardless of how long the test takes to run or how many times it rebuilds
+    the sample records."""
+    global _frozen_now
+    _frozen_now = now_ist()
+    try:
+        yield
+    finally:
+        _frozen_now = None
 
 
 @pytest.fixture
