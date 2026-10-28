@@ -184,13 +184,23 @@ def test_analyze_does_not_open_a_portal(desk, monkeypatch):
         assert client.post("/api/analyze", json={"scope": "everything"}).status_code == 400
 
 
-def test_the_desk_reads_the_config_named_in_the_environment(monkeypatch):
+def test_the_desk_reads_the_config_named_in_the_environment(monkeypatch, tmp_path):
     from chanakya.server import desk_settings, is_demo, project_root
 
     monkeypatch.setenv("CHANAKYA_CONFIG", str(project_root() / "config" / "chanakya.demo.yaml"))
     assert is_demo(desk_settings())
     monkeypatch.delenv("CHANAKYA_CONFIG")
-    assert desk_settings().config_path == project_root() / "config" / "chanakya.yaml"
+
+    # With no override, the desk falls back to <project root>/config/chanakya.yaml. That file is
+    # gitignored (developer-local), so point project_root() at a sandbox with its own copy rather
+    # than depending on a file this repo never commits.
+    from .conftest import ROOT
+
+    (tmp_path / "config").mkdir()
+    config_path = tmp_path / "config" / "chanakya.yaml"
+    config_path.write_text((ROOT / "config" / "chanakya.example.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(server, "project_root", lambda: tmp_path)
+    assert desk_settings().config_path == config_path
 
 
 def test_stop_before_a_source_leaves_a_partial_run(settings):
