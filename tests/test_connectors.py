@@ -156,6 +156,36 @@ def test_http_redirect_off_allowlist_blocked():
         c.get_text("https://eprocure.gov.in/cppp/x")
 
 
+def test_download_rejects_declared_oversize_without_writing_file(tmp_path):
+    def handler(req):
+        if req.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return httpx.Response(200, content=b"x" * 10, headers={"content-length": str(50 * 1024 * 1024)})
+
+    settings = HttpSettings(min_interval_s=0, max_retries=2, backoff_base_s=0, respect_robots_txt=True, max_download_mb=1)
+    client = PoliteClient(settings, transport=httpx.MockTransport(handler), sleep=lambda s: None, resolve_dns=False)
+    with client, pytest.raises(FetchError, match="too large"):
+        client.download("https://eprocure.gov.in/cppp/doc.pdf", tmp_path, "doc.pdf")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_download_rejects_oversize_discovered_while_streaming(tmp_path):
+    oversized = b"x" * (2 * 1024 * 1024)
+
+    def handler(req):
+        if req.url.path == "/robots.txt":
+            return httpx.Response(404)
+        # A false content-length bypasses the declared-size pre-check so the test exercises the
+        # streaming-size enforcement, not the earlier header check covered by the test above.
+        return httpx.Response(200, content=oversized, headers={"content-length": "0"})
+
+    settings = HttpSettings(min_interval_s=0, max_retries=2, backoff_base_s=0, respect_robots_txt=True, max_download_mb=1)
+    client = PoliteClient(settings, transport=httpx.MockTransport(handler), sleep=lambda s: None, resolve_dns=False)
+    with client, pytest.raises(FetchError, match="exceeded size limit"):
+        client.download("https://eprocure.gov.in/cppp/doc.pdf", tmp_path, "doc.pdf")
+    assert list(tmp_path.iterdir()) == [], "a partial download must not be left on disk"
+
+
 # ---------------------------------------------------------------- GePNIC
 def gep():
     return GePNICConnector(SourceConfig(id="gep", type="gepnic", base_url="https://eprocure.gov.in/eprocure/app", fetch_detail=True))
