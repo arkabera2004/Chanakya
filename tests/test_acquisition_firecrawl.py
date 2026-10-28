@@ -47,6 +47,25 @@ def test_successful_scrape_returns_markdown_and_usage():
     assert res.diagnostics["credits_used"] == 1
 
 
+def test_labels_extract_a_tender_record():
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={
+            "success": True,
+            "data": {
+                "markdown": "Title: Supply of Widgets\nRef No: T-77\n",
+                "metadata": {"title": "Supply of Widgets", "statusCode": 200, "sourceURL": "https://x/"},
+            },
+        })
+
+    client = httpx.Client(base_url="https://api.firecrawl.dev", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"labels": {"title": ["title"], "ref_no": ["ref no"]}})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "ok"
+    assert len(res.records) == 1
+    assert res.records[0].title == "Supply of Widgets"
+    assert res.records[0].ref_no == "T-77"
+
+
 def test_invalid_api_key_is_classified_blocked_not_failed():
     def handler(req):
         return httpx.Response(401, json={"success": False, "error": "Invalid API key"})

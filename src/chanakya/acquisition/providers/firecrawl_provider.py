@@ -15,6 +15,7 @@ import httpx
 
 from ...config import FirecrawlSettings, Settings
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability, ProviderConfigError
+from ..extraction import extract_by_labels
 
 
 class FirecrawlProvider(AcquisitionProvider):
@@ -94,15 +95,30 @@ class FirecrawlProvider(AcquisitionProvider):
 
             data = body.get("data", {})
             metadata = data.get("metadata", {})
+            markdown = data.get("markdown")
+            result_url = metadata.get("sourceURL", request.url)
+
+            records: list = []
+            diagnostics: dict = {
+                "title": metadata.get("title"),
+                "http_status": metadata.get("statusCode"),
+                "credits_used": metadata.get("creditsUsed"),
+                "scrape_id": metadata.get("scrapeId"),
+            }
+            labels: dict[str, list[str]] = request.extra.get("labels", {})
+            if labels and markdown:
+                records, review = extract_by_labels(
+                    markdown, labels, source_id=request.source_id, url=result_url,
+                    platform=request.extra.get("platform", "firecrawl"), provider_id=self.provider_id,
+                )
+                diagnostics["extracted"] = review if review else (records[0].raw if records else {})
+                if review:
+                    diagnostics["needs_review"] = review
+
             return AcquisitionResult(
-                provider_id=self.provider_id, url=metadata.get("sourceURL", request.url), status="ok",
-                raw_content=data.get("markdown"), content_type="text/markdown",
-                diagnostics={
-                    "title": metadata.get("title"),
-                    "http_status": metadata.get("statusCode"),
-                    "credits_used": metadata.get("creditsUsed"),
-                    "scrape_id": metadata.get("scrapeId"),
-                },
+                provider_id=self.provider_id, url=result_url, status="ok",
+                records=records, raw_content=markdown, content_type="text/markdown",
+                diagnostics=diagnostics,
             )
         finally:
             if owns_client:
