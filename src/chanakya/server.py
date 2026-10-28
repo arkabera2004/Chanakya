@@ -667,10 +667,24 @@ def _model_answer(settings: Settings, message: str, brief: dict[str, Any]) -> st
 
 
 def create_app() -> FastAPI:
+    settings = desk_settings()
+    if settings.app.environment == "production":
+        token = settings.secret(settings.app.api_token_env) if settings.app.api_token_env else None
+        if not token:
+            # Fail fast at startup, not on the first request: a production desk silently
+            # running open (because api_token_env was never set) is exactly the "accidentally
+            # public" outcome this check exists to rule out.
+            raise RuntimeError(
+                "app.environment is 'production' but app.api_token_env is unset or its "
+                "environment variable has no value — refusing to start an unauthenticated "
+                "desk API in production. Set app.api_token_env to the name of an env var "
+                "holding a real token, and set that env var, before deploying."
+            )
+
     app = FastAPI(title="Chanakya desk", version="0.1.0", dependencies=[Depends(require_desk_auth)])
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=desk_settings().app.cors_origins,
+        allow_origins=settings.app.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )

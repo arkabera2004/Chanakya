@@ -62,3 +62,35 @@ def test_configured_token_also_protects_acquisition_routes(desk, monkeypatch):
     with TestClient(create_app()) as client:
         assert client.get("/api/acquisition/providers").status_code == 401
         assert client.get("/api/acquisition/providers", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+
+
+def test_production_mode_without_a_token_refuses_to_start(desk):
+    desk.app.environment = "production"
+    desk.app.api_token_env = None
+    with pytest.raises(RuntimeError, match="refusing to start an unauthenticated desk API"):
+        create_app()
+
+
+def test_production_mode_with_a_configured_but_unset_env_var_still_refuses(desk, monkeypatch):
+    desk.app.environment = "production"
+    desk.app.api_token_env = "CHANAKYA_TEST_DESK_TOKEN"
+    monkeypatch.delenv("CHANAKYA_TEST_DESK_TOKEN", raising=False)
+    with pytest.raises(RuntimeError, match="refusing to start"):
+        create_app()
+
+
+def test_production_mode_with_a_real_token_starts_and_enforces_it(desk, monkeypatch):
+    desk.app.environment = "production"
+    desk.app.api_token_env = "CHANAKYA_TEST_DESK_TOKEN"
+    monkeypatch.setenv("CHANAKYA_TEST_DESK_TOKEN", "s3cret")
+    with TestClient(create_app()) as client:
+        assert client.get("/api/health").status_code == 200
+        assert client.get("/api/brief").status_code == 401
+        assert client.get("/api/brief", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+
+
+def test_development_mode_is_unaffected_by_the_production_check(desk):
+    assert desk.app.environment == "development"
+    desk.app.api_token_env = None
+    with TestClient(create_app()) as client:  # must not raise
+        assert client.get("/api/brief").status_code == 200

@@ -36,9 +36,13 @@ class AppSettings(_Strict):
     documents_dir: Path = Path("./data/documents")
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"  # env CHANAKYA_LOG_FORMAT overrides (see obs.py)
+    # "development" (default) never blocks startup. "production" makes create_app() fail fast
+    # (not per-request) if api_token_env isn't set and resolvable — see server.create_app().
+    # Set via config or the CHANAKYA_ENV env var (see _apply_env_overrides below).
+    environment: Literal["development", "production"] = "development"
     # Bearer-token auth for the whole desk API (server.require_desk_auth). Unset (the default)
     # preserves today's open-localhost desk behavior; set this to an env var name holding a
-    # real token before exposing the desk beyond localhost.
+    # real token before exposing the desk beyond localhost. Required when environment=production.
     api_token_env: str | None = None
     # Origins the desk API accepts cross-origin requests from. The default covers the two local
     # dev addresses next's dev server binds to; override with the real frontend origin(s) before
@@ -492,6 +496,8 @@ def apply_profile_overlay(settings: Settings) -> Settings:
 
 def _apply_env_overrides(settings: Settings) -> None:
     """A few operational overrides that are convenient in containers."""
+    if v := os.environ.get("CHANAKYA_ENV"):
+        settings.app.environment = v  # type: ignore[assignment]
     if v := os.environ.get("CHANAKYA_DATABASE_URL"):
         settings.app.database_url = v
     if v := os.environ.get("CHANAKYA_LLM_MODE"):
