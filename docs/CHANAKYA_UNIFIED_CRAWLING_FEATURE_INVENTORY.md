@@ -48,12 +48,22 @@ but not actually able to feed a tender anywhere. Closed in commits `ba30369`→`
   provider is local, mocked HTTP where it's a managed API).
 - `STRUCTURED_EXTRACTION` added to each of these providers' declared capabilities (Zyte
   already claimed it without implementing it — now it's real).
-- Crawl4AI and Firecrawl are **not** wired to this helper: they return Markdown, not HTML, so
-  CSS selectors don't apply — a genuinely different (not yet built) field-extraction strategy
-  would be needed for those two.
 - `test_acquisition_pipeline_integration.py`'s existing dedup/provenance/partial-status tests
   already prove this is provider-agnostic at the job-manager level (they use a generic stub
   provider), so this closure required no additional integration-layer test.
+
+**Crawl4AI and Firecrawl — CLOSED** (commits `ba30369`(helper)→`4e9b5a3`): both return
+Markdown, not HTML, so `extract_by_selectors` (CSS-based) doesn't apply. Added
+`extract_by_labels()` to the same module: a deterministic "label: value" line scanner
+(plain, `**bold**`, or a two-column table row), with a caller-supplied synonym map per field
+(e.g. `{"ref_no": ["tender reference number", "ref no"]}`). Date and amount fields route
+through the existing `timeutil.parse_portal_datetime`/`connectors.base.parse_inr_amount`
+normalizers instead of a third copy; an unparseable value is surfaced in
+`diagnostics.needs_review`, never dropped or defaulted. No LLM involved — Crawl4AI's own
+`llm_assisted` mode remains the documented non-goal below. Crawl4AI verified with a real
+`AsyncWebCrawler` run against a loopback server; Firecrawl verified with mocked HTTP (no
+additional credits spent, consistent with its existing test file's policy). All 9 providers
+now feed real `TenderRecord`s into the same pipeline.
 
 ## Per-provider capability status
 
@@ -80,6 +90,7 @@ but not actually able to feed a tender anywhere. Closed in commits `ba30369`→`
 | HTML-to-Markdown via `AsyncWebCrawler` | TESTED (7 tests, real local crawl against a loopback server) + ad hoc LIVE_VERIFIED (example.com, httpbin.org/404 during dev) |
 | SSRF validation before any crawl (reuses `chanakya.security.validate_url`) | TESTED |
 | LLM-assisted extraction | `NOT_APPLICABLE_WITH_REASON`: would call out to a model provider independently of `chanakya.llm`'s budget/provider machinery, duplicating rather than reusing it. `validate_config()` reports this explicitly. |
+| Structured extraction via `extract_by_labels()` (deterministic, no LLM) | TESTED (1 test, real `AsyncWebCrawler` run against a loopback server) |
 | Hosted Crawl4AI API | NOT_STARTED — no account/key available or requested |
 
 ### 4. Scrapy (`providers/scrapy_provider.py` + `_scrapy_worker.py`)
@@ -105,6 +116,7 @@ but not actually able to feed a tender anywhere. Closed in commits `ba30369`→`
 | `/v1/scrape` (single-page, markdown) | **LIVE_VERIFIED** — 1 real call during dev (`https://example.com`, 1 credit used), response schema confirmed, not guessed |
 | Auth rejection (401/403) → blocked, non-retryable | TESTED (mocked) |
 | Rate limit (429) → failed, retryable | TESTED (mocked) |
+| Structured extraction via `extract_by_labels()` (deterministic, no LLM) | TESTED (mocked HTTP) |
 | Site crawl, URL mapping, batch/async jobs, webhooks | NOT_STARTED — only the single-page scrape endpoint was implemented; the others are documented by Firecrawl but not built this phase |
 
 ### 7. Apify (`providers/apify_provider.py`)

@@ -43,6 +43,10 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 | 2026-10-29 | `6a9860a` | Playwright wired to real TenderRecord extraction | `playwright_provider.py` | 1 new, real headless Chromium |
 | 2026-10-29 | `3a14ff7` | Browserless wired to real TenderRecord extraction | `browserless_provider.py` | 1 new, mocked HTTP |
 | 2026-10-29 | `1b95924` | Zyte wired to real TenderRecord extraction (6th and final provider) | `zyte_provider.py` | 1 new, mocked HTTP |
+| 2026-10-29 | `112e019` | Full-jitter retry backoff in the job manager | `job_manager.py` | 1 new |
+| 2026-10-29 | `5eda34b` | `extract_by_labels()`: deterministic Markdown field extraction | `acquisition/extraction.py` | 10 new (4 prior + 6 new) |
+| 2026-10-29 | `0f4f741` | Crawl4AI wired to real TenderRecord extraction | `crawl4ai_provider.py` | 1 new, real AsyncWebCrawler run |
+| 2026-10-29 | `4e9b5a3` | Firecrawl wired to real TenderRecord extraction — 9th and final provider | `firecrawl_provider.py` | 1 new, mocked HTTP |
 
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
@@ -119,3 +123,8 @@ times consecutively: 418 passed / 5 skipped / 0 failed, every time. Also run aga
   before the local verification above.
 - No provider was wired into the CPPP/GePNIC source scanning flow; they remain independent,
   directly-invokable capabilities behind the job manager.
+- **Phase 3A CLOSED**: all 9 providers now produce real `TenderRecord`s. Crawl4AI/Firecrawl
+  needed a new strategy (`extract_by_labels`, label-based Markdown parsing) since their output
+  has no DOM for the existing CSS-selector helper; see the feature inventory for detail. Still
+  single-page/single-request extraction only — no multi-page pagination/pipeline, no LLM-assisted
+  extraction, matching every other provider's documented scope.
