@@ -49,6 +49,21 @@ def _wait_terminal(client: TestClient, job_id: str, tries: int = 100) -> dict:
     raise AssertionError("job did not reach a terminal status")
 
 
+def test_no_token_configured_is_open_by_default(desk):
+    """Preserves today's open-localhost desk behavior when app.api_token_env is unset."""
+    with TestClient(create_app()) as client:
+        assert client.get("/api/acquisition/providers").status_code == 200
+
+
+def test_configured_token_rejects_missing_or_wrong_credentials(desk, monkeypatch):
+    desk.app.api_token_env = "CHANAKYA_TEST_ACQ_TOKEN"
+    monkeypatch.setenv("CHANAKYA_TEST_ACQ_TOKEN", "s3cret")
+    with TestClient(create_app()) as client:
+        assert client.get("/api/acquisition/providers").status_code == 401
+        assert client.get("/api/acquisition/providers", headers={"Authorization": "Bearer wrong"}).status_code == 401
+        assert client.get("/api/acquisition/providers", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+
+
 def test_providers_endpoint_lists_all_nine(desk):
     with TestClient(create_app()) as client:
         body = client.get("/api/acquisition/providers").json()

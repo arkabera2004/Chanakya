@@ -36,6 +36,10 @@ class AppSettings(_Strict):
     documents_dir: Path = Path("./data/documents")
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"  # env CHANAKYA_LOG_FORMAT overrides (see obs.py)
+    # Bearer-token auth for the acquisition API (desk_acquisition.py). Unset (the default)
+    # preserves today's open-localhost desk behavior; set this to an env var name holding a
+    # real token before exposing the desk beyond localhost.
+    api_token_env: str | None = None
 
 
 class HttpSettings(_Strict):
