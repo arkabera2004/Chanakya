@@ -241,6 +241,107 @@ class AwardsSettings(_Strict):
     verification_status: str = "candidate"  # verified_working | verified_restricted | candidate | unsupported
 
 
+class ScraplingSettings(_Strict):
+    """Local, dependency-based retrieval/extraction via the ``scrapling`` package."""
+
+    enabled: bool = False
+    timeout_s: float = 30.0
+    max_retries: int = 2
+
+
+class CrawleeSettings(_Strict):
+    """Local orchestration via ``crawlee`` (request queues, concurrency, retries)."""
+
+    enabled: bool = False
+    max_concurrency: int = 5
+    max_requests_per_crawl: int = 50
+    max_retries: int = 2
+
+
+class Crawl4AISettings(_Strict):
+    """Local HTML-to-structured extraction via ``crawl4ai``. ``llm_assisted`` routes through
+    ``llm.*`` — it never calls a provider of its own."""
+
+    enabled: bool = False
+    llm_assisted: bool = False
+    base_url: str | None = None   # set to use Crawl4AI's hosted API instead of the local library
+    api_key_env: str = "CRAWL4AI_API_KEY"
+
+
+class ScrapySettings(_Strict):
+    """Local, process-isolated crawling via ``scrapy`` for sources that need its scheduler."""
+
+    enabled: bool = False
+    concurrent_requests: int = 8
+    download_timeout_s: float = 30.0
+
+
+class PlaywrightSettings(_Strict):
+    """Local browser automation. Used only when a source demonstrably needs JS rendering —
+    see docs/CRAWLING_BENCHMARK_SPECIFICATION.md, which found none do as of this writing."""
+
+    enabled: bool = False
+    browser: Literal["chromium", "firefox", "webkit"] = "chromium"
+    headless: bool = True
+    navigation_timeout_s: float = 30.0
+    max_concurrent_pages: int = 2
+
+
+class FirecrawlSettings(_Strict):
+    """Managed scraping via the Firecrawl API. Disabled until ``api_key_env`` resolves."""
+
+    enabled: bool = False
+    api_key_env: str = "FIRECRAWL_API_KEY"
+    base_url: str = "https://api.firecrawl.dev"
+    timeout_s: float = 60.0
+    max_retries: int = 2
+
+
+class ApifySettings(_Strict):
+    """Managed actor execution via the Apify API. Disabled until ``api_key_env`` resolves."""
+
+    enabled: bool = False
+    api_key_env: str = "APIFY_API_TOKEN"
+    base_url: str = "https://api.apify.com/v2"
+    timeout_s: float = 60.0
+    max_retries: int = 2
+
+
+class BrowserlessSettings(_Strict):
+    """Remote browser execution via Browserless. Disabled until ``api_key_env`` resolves."""
+
+    enabled: bool = False
+    api_key_env: str = "BROWSERLESS_API_KEY"
+    base_url: str = "https://chrome.browserless.io"
+    timeout_s: float = 60.0
+
+
+class ZyteSettings(_Strict):
+    """Managed retrieval/extraction via the Zyte API. Disabled until ``api_key_env`` resolves."""
+
+    enabled: bool = False
+    api_key_env: str = "ZYTE_API_KEY"
+    base_url: str = "https://api.zyte.com/v1"
+    timeout_s: float = 60.0
+    max_retries: int = 2
+
+
+class AcquisitionProvidersSettings(_Strict):
+    """One block per acquisition provider (see docs/CHANAKYA_UNIFIED_CRAWLING_FEATURE_INVENTORY.md).
+    Every provider defaults to disabled; the registry (acquisition/registry.py) treats a disabled
+    or credential-less provider as unavailable rather than silently falling back to another one."""
+
+    scrapling: ScraplingSettings = Field(default_factory=ScraplingSettings)
+    crawlee: CrawleeSettings = Field(default_factory=CrawleeSettings)
+    crawl4ai: Crawl4AISettings = Field(default_factory=Crawl4AISettings)
+    scrapy: ScrapySettings = Field(default_factory=ScrapySettings)
+    playwright: PlaywrightSettings = Field(default_factory=PlaywrightSettings)
+    firecrawl: FirecrawlSettings = Field(default_factory=FirecrawlSettings)
+    apify: ApifySettings = Field(default_factory=ApifySettings)
+    browserless: BrowserlessSettings = Field(default_factory=BrowserlessSettings)
+    zyte: ZyteSettings = Field(default_factory=ZyteSettings)
+
+
 class Settings(_Strict):
     app: AppSettings = Field(default_factory=AppSettings)
     http: HttpSettings = Field(default_factory=HttpSettings)
@@ -257,6 +358,7 @@ class Settings(_Strict):
     schedule: ScheduleSettings = Field(default_factory=ScheduleSettings)
     documents: DocumentSettings = Field(default_factory=DocumentSettings)
     awards: AwardsSettings = Field(default_factory=AwardsSettings)
+    acquisition_providers: AcquisitionProvidersSettings = Field(default_factory=AcquisitionProvidersSettings)
 
     config_path: Path | None = None
 
