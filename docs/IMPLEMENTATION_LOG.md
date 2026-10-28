@@ -31,6 +31,9 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 | 2026-10-28 | `ff3faae` | Real operational-analytics panel on `/providers` | `providers/page.tsx`, `api-acquisition.ts` | `npm run build` clean; verified in a real browser against real backend data |
 | 2026-10-28 | `f1edb60` | Docs: reflect auth, recovery, analytics, integration tests | `docs/*.md` | n/a |
 | 2026-10-28 | `744711a` | Postgres parity: fixed 2 test files bypassing it, live-verified | `test_acquisition_job_manager.py`, `test_acquisition_pipeline_integration.py` | Full suite against real Postgres 17: 411 passed / 2 skipped / 0 failed |
+| 2026-10-28 | `b4d4c73` | Docs: record Postgres parity closure | `docs/*.md` | n/a |
+| 2026-10-29 | `7065002` | App-wide bearer-token auth (was acquisition-only) | `server.py`, `desk_acquisition.py` | 4 new; live-verified against a real running server |
+| 2026-10-29 | `c3808cc` | Configurable CORS origins (`app.cors_origins`) | `config.py`, `server.py` | 1 new, real CORS-header assertion |
 
 ## Outstanding limitations (honest, as of the last commit above)
 
@@ -47,10 +50,16 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
   was still not built — no acquisition-sourced records with meaningful confidence/evidence data
   exist yet to review in this session's test runs, so building that screen now would risk a
   "page with nothing real to show" rather than a verified feature.
-- **Auth**: `/api/acquisition/*` now supports optional bearer-token auth
-  (`app.api_token_env`, commit `99fc00d`) — opt-in, so local dev is unaffected until a token is
-  configured. The rest of the desk API (`/api/opportunities`, `/api/brief`, etc.) is unchanged and
-  still has no auth; extending the same gate there was out of scope for this phase.
+- **Auth: EXTENDED to the whole desk API (commit `7065002`).** `app.api_token_env` (opt-in,
+  unset by default — local dev unaffected) now gates every route via a single app-wide FastAPI
+  dependency, not just `/api/acquisition/*`. `/api/health` stays explicitly exempt. Live-verified
+  against a real running server: 200/401/401/200 for no-header/wrong-token/missing-header/
+  correct-token respectively. Still not done: no distinct "production mode" concept exists in
+  `config.py` that would make the app refuse to start without a token configured — a token is
+  opt-in, not enforced, in any environment. That would require introducing an environment
+  concept this project doesn't currently have, which is a product decision, not made here.
+- **CORS: now configurable** (`app.cors_origins`, commit `c3808cc`, default unchanged). Real
+  CORS-header behavior verified by test, not just that the list is stored.
 - **Postgres parity: CLOSED this phase.** Docker was available but not running; started it
   (`open -a Docker`), ran a disposable `postgres:17-alpine` container
   (`chanakya-pg-test`, not part of CI, torn down after verification), installed the
