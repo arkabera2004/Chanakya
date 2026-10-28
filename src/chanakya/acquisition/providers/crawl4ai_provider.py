@@ -20,11 +20,14 @@ import asyncio
 from ...config import Crawl4AISettings
 from ...security import validate_url
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability, ProviderConfigError
+from ..extraction import extract_by_labels
 
 
 class Crawl4AIProvider(AcquisitionProvider):
     provider_id = "crawl4ai"
-    capabilities = frozenset({ProviderCapability.BROWSER_RENDER, ProviderCapability.STRUCTURED_EXTRACTION})
+    capabilities = frozenset(
+        {ProviderCapability.BROWSER_RENDER, ProviderCapability.STRUCTURED_EXTRACTION}
+    )  # extraction is now real (label-based Markdown parsing); see extract_by_labels
     requires_credentials = False
 
     def __init__(self, settings: Crawl4AISettings) -> None:
@@ -88,8 +91,21 @@ class Crawl4AIProvider(AcquisitionProvider):
             )
 
         markdown = result.markdown.raw_markdown if hasattr(result.markdown, "raw_markdown") else str(result.markdown)
+
+        records: list = []
+        diagnostics: dict = {"status_code": status_code}
+        labels: dict[str, list[str]] = request.extra.get("labels", {})
+        if labels and markdown:
+            records, review = extract_by_labels(
+                markdown, labels, source_id=request.source_id, url=request.url,
+                platform=request.extra.get("platform", "crawl4ai"), provider_id=self.provider_id,
+            )
+            diagnostics["extracted"] = review if review else (records[0].raw if records else {})
+            if review:
+                diagnostics["needs_review"] = review
+
         return AcquisitionResult(
             provider_id=self.provider_id, url=request.url, status="ok",
-            raw_content=markdown, content_type="text/markdown",
-            diagnostics={"status_code": status_code},
+            records=records, raw_content=markdown, content_type="text/markdown",
+            diagnostics=diagnostics,
         )

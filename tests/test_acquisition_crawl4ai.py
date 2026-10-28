@@ -87,6 +87,29 @@ def test_403_is_classified_blocked(local_server, monkeypatch):
         _Handler.status = 200
 
 
+def test_labels_extract_a_tender_record_from_real_markdown(local_server, monkeypatch):
+    import chanakya.acquisition.providers.crawl4ai_provider as mod
+
+    monkeypatch.setattr(mod, "validate_url", lambda *a, **k: a[0])
+    _Handler.body = (
+        b"<html><body><p>Title: Supply of Widgets</p><p>Ref No: T-77</p>"
+        b"<p>This tender notice has enough visible text content to avoid Crawl4AI's "
+        b"near-empty-content anti-bot heuristic during this test.</p></body></html>"
+    )
+    try:
+        req = AcquisitionRequest(
+            url=local_server, source_id="test",
+            extra={"labels": {"title": ["title"], "ref_no": ["ref no"]}},
+        )
+        res = _provider().fetch(req)
+        assert res.status == "ok"
+        assert len(res.records) == 1
+        assert res.records[0].title == "Supply of Widgets"
+        assert res.records[0].ref_no == "T-77"
+    finally:
+        _Handler.body = b"<html><body><h1>Hello Crawl4AI with enough visible text content here</h1></body></html>"
+
+
 def test_503_is_classified_failed_and_retryable(local_server, monkeypatch):
     import chanakya.acquisition.providers.crawl4ai_provider as mod
 
