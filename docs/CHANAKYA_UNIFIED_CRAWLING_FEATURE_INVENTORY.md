@@ -33,6 +33,28 @@ surfaced and resolved one real issue: the demo DB was stamped at migration `0001
 `chanakya db upgrade` after the new tables were added — exactly the fail-fast behavior the
 migration system is designed to produce, not a defect.
 
+## Canonical-record normalization — CLOSED (was a real gap)
+
+Through commit `af3c1ff`, **only Scrapling actually produced `TenderRecord`s**; every other
+HTML-returning provider (Crawlee, Scrapy, Playwright, Browserless, Zyte) only returned raw
+HTML with no path into Chanakya's canonical procurement pipeline — a provider "registered"
+but not actually able to feed a tender anywhere. Closed in commits `ba30369`→`1b95924`:
+
+- `acquisition/extraction.py`: one shared, BeautifulSoup-based `extract_by_selectors()` helper
+  (not six near-duplicate implementations), reusing a core existing dependency.
+- Scrapling refactored onto it (zero behavior change — all 7 pre-existing tests pass
+  unchanged); Crawlee, Scrapy, Playwright, Browserless, and Zyte wired to it, each with one
+  new test proving real extraction (loopback-server/real-subprocess/real-Chromium where the
+  provider is local, mocked HTTP where it's a managed API).
+- `STRUCTURED_EXTRACTION` added to each of these providers' declared capabilities (Zyte
+  already claimed it without implementing it — now it's real).
+- Crawl4AI and Firecrawl are **not** wired to this helper: they return Markdown, not HTML, so
+  CSS selectors don't apply — a genuinely different (not yet built) field-extraction strategy
+  would be needed for those two.
+- `test_acquisition_pipeline_integration.py`'s existing dedup/provenance/partial-status tests
+  already prove this is provider-agnostic at the job-manager level (they use a generic stub
+  provider), so this closure required no additional integration-layer test.
+
 ## Per-provider capability status
 
 ### 1. Scrapling (`providers/scrapling_provider.py`)

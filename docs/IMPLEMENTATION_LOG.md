@@ -36,6 +36,13 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 | 2026-10-29 | `c3808cc` | Configurable CORS origins (`app.cors_origins`) | `config.py`, `server.py` | 1 new, real CORS-header assertion |
 | 2026-10-29 | `8cc753f` | Production-mode startup fails fast without an auth token | `config.py`, `server.py` | 5 new; live-verified against a real server (crash on missing token, 200/401/200 with one configured) |
 | 2026-10-29 | `d885e17` | **FIXED**: root-caused and closed the intermittent `test_followup_alerts` failure | `tests/conftest.py`, `tests/test_followup_alerts.py` | 5× consecutive full-suite runs: 0 failures (previously ~1/7-8); also verified against real Postgres 17 |
+| 2026-10-29 | `ba30369` | Shared selector-based HTML→TenderRecord extraction helper | `acquisition/extraction.py` | 4 new |
+| 2026-10-29 | `3d03d0f` | Scrapling refactored onto the shared helper | `scrapling_provider.py` | 0 new; all 7 existing tests pass unchanged (zero behavior change) |
+| 2026-10-29 | `ec37d2e` | Crawlee wired to real TenderRecord extraction | `crawlee_provider.py` | 1 new, real HttpCrawler run |
+| 2026-10-29 | `2606ecd` | Scrapy wired to real TenderRecord extraction | `scrapy_provider.py` | 1 new, real subprocess run |
+| 2026-10-29 | `6a9860a` | Playwright wired to real TenderRecord extraction | `playwright_provider.py` | 1 new, real headless Chromium |
+| 2026-10-29 | `3a14ff7` | Browserless wired to real TenderRecord extraction | `browserless_provider.py` | 1 new, mocked HTTP |
+| 2026-10-29 | `1b95924` | Zyte wired to real TenderRecord extraction (6th and final provider) | `zyte_provider.py` | 1 new, mocked HTTP |
 
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
