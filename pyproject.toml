@@ -36,6 +36,7 @@ dev = ["pytest>=8", "respx>=0.21", "reportlab>=4.0", "ruff>=0.6"]
 # Acquisition providers (docs/CHANAKYA_UNIFIED_CRAWLING_FEATURE_INVENTORY.md). Each is optional
 # and only activates when acquisition_providers.<name>.enabled is set in config.
 scrapling = ["scrapling>=0.5"]
+playwright = ["playwright>=1.64"]
 
 [project.scripts]
 chanakya = "chanakya.cli:app"
