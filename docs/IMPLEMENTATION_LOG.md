@@ -34,6 +34,26 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 | 2026-10-28 | `b4d4c73` | Docs: record Postgres parity closure | `docs/*.md` | n/a |
 | 2026-10-29 | `7065002` | App-wide bearer-token auth (was acquisition-only) | `server.py`, `desk_acquisition.py` | 4 new; live-verified against a real running server |
 | 2026-10-29 | `c3808cc` | Configurable CORS origins (`app.cors_origins`) | `config.py`, `server.py` | 1 new, real CORS-header assertion |
+| 2026-10-29 | `8cc753f` | Production-mode startup fails fast without an auth token | `config.py`, `server.py` | 5 new; live-verified against a real server (crash on missing token, 200/401/200 with one configured) |
+
+## KNOWN DEFECT found during this phase's verification (not fixed, root-caused)
+
+`tests/test_followup_alerts.py::test_a_run_sends_the_follow_up_alerts_only_when_they_are_switched_on`
+failed intermittently (1 of ~8 full-suite runs observed; 100% pass in isolation and in 7 of 8 full
+runs) during unrelated verification work (Priority D, commit `8cc753f`). **Confirmed unrelated to
+this session's changes** — it touches `reporting/followups.py`/email-alert state, not
+auth/config/acquisition code.
+
+Root cause (evidence, not guessed): the failing assertion is `again.corrigendum_alerts_sent == 0`
+on a *third* `rescan(..., email=True)` call, which instead sent 4 (expected 0 — the alert should
+already be marked delivered from the second call). `pending_corrigendum_alerts` dedupes by
+`idempotency_key(..., f"change:{event.id}", recipient)` — keyed to a specific `ChangeEvent` row id,
+not a timestamp. The intermittent resend therefore most likely means the third rescan sometimes
+produces **new** `ChangeEvent` rows (new ids) for the same underlying diff, rather than reusing the
+ones already delivered against — i.e., a non-determinism in change detection itself, not in the
+alert-dedup logic. Not fixed here: confirming that hypothesis requires instrumenting
+`diff_changes`/`upsert_record` across repeated identical rescans, which is a focused investigation
+in its own right, not a safe blind fix under time pressure for an unrelated subsystem.
 
 ## Outstanding limitations (honest, as of the last commit above)
 
@@ -50,14 +70,15 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
   was still not built — no acquisition-sourced records with meaningful confidence/evidence data
   exist yet to review in this session's test runs, so building that screen now would risk a
   "page with nothing real to show" rather than a verified feature.
-- **Auth: EXTENDED to the whole desk API (commit `7065002`).** `app.api_token_env` (opt-in,
-  unset by default — local dev unaffected) now gates every route via a single app-wide FastAPI
-  dependency, not just `/api/acquisition/*`. `/api/health` stays explicitly exempt. Live-verified
-  against a real running server: 200/401/401/200 for no-header/wrong-token/missing-header/
-  correct-token respectively. Still not done: no distinct "production mode" concept exists in
-  `config.py` that would make the app refuse to start without a token configured — a token is
-  opt-in, not enforced, in any environment. That would require introducing an environment
-  concept this project doesn't currently have, which is a product decision, not made here.
+- **Auth: EXTENDED to the whole desk API (commit `7065002`)**, then **production-mode-enforced
+  (commit `8cc753f`)**. `app.api_token_env` (opt-in, unset by default — local dev unaffected)
+  gates every route via a single app-wide FastAPI dependency; `app.environment=production`
+  (default `development`) now makes `create_app()` refuse to start if the token isn't
+  resolvable, closing the "could accidentally run open in production" gap. Both live-verified
+  against real running servers. Remaining gap: nothing automatically sets
+  `environment=production` in any deployment config (Dockerfile/docker-compose) — an operator
+  must set it explicitly; this was a deliberate choice to avoid breaking the documented local
+  Docker workflow, not an oversight, but worth revisiting if/when there's a real deployment target.
 - **CORS: now configurable** (`app.cors_origins`, commit `c3808cc`, default unchanged). Real
   CORS-header behavior verified by test, not just that the list is stored.
 - **Postgres parity: CLOSED this phase.** Docker was available but not running; started it
