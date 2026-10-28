@@ -1,15 +1,24 @@
 """GeM-CPPP (Central Public Procurement Portal) connector.
 
-**BROKEN as of 2026-10-29 (live-verified):** ``eprocure.gov.in/cppp/`` now serves a
-client-rendered Vue SPA (a JS bundle + an empty ``#app`` div) instead of the server-rendered
-HTML this connector parses; ``/latestactivetendersnew/{feed}`` now returns HTTP 404.
-``chanakya sources test -s cppp_central`` fails with exactly that. The SPA's own REST API
-is served under ``/cpppapi`` (seen in its JS bundle) but its request/response shapes were
-not reverse-engineered this phase — doing so from unknown POST payloads against a
-government API needs a separate, explicitly authorized phase, not a blind-probing attempt.
-See docs/20_RISKS_AND_OPEN_QUESTIONS.md. Everything below this line describes the
-structure this connector was built and tested against (2026-10-10), which is no longer
-live — kept for the parsing logic and fixture tests, not as a claim of current portal shape.
+**BLOCKED_BY_CAPTCHA as of 2026-10-29 (live-verified via browser, investigated further
+2026-10-29):** ``eprocure.gov.in/cppp/`` now serves a client-rendered Vue SPA instead of the
+server-rendered HTML this connector parses; the old ``/latestactivetendersnew/{feed}`` paths
+404. Using the SPA's own public "Search Tender / Bids > Latest Active Tenders" menu (ordinary
+navigation, not a synthesized request), both the "Central - Active Tenders" and "State -
+Active Tenders" tabs load with **"Total Count: 0"** and a mandatory CAPTCHA field next to the
+Search button — the listing grid is not populated until a solved CAPTCHA is submitted. This
+is a stricter restriction than the old portal, where only a separate, unused search form
+(not plain browsing/pagination of the listing) had a CAPTCHA. Per this project's explicit
+no-CAPTCHA-bypass rule, no search was submitted and the actual tender-record response schema
+was not observed. Supporting dropdown endpoints (organisation list, product category list,
+sort options — filter metadata, not tender data) are open and CAPTCHA-free, confirming the
+gating is specifically on the listing/search endpoint, not the whole API. Full endpoint
+inventory in docs/20_RISKS_AND_OPEN_QUESTIONS.md. Conclusion: this connector cannot reach
+real tender data against the current live portal without solving a CAPTCHA, which is out of
+scope — status stays ``unsupported``, not a lower-effort "needs a code fix" classification.
+Everything below this line describes the structure this connector was built and tested
+against (2026-10-10), which is no longer live — kept for the parsing logic and fixture
+tests, not as a claim of current portal shape.
 
 Verified on 2026-10-10 (see docs/02_GOVERNMENT_SOURCE_RESEARCH.md):
 - ``/cppp/latestactivetendersnew/{cpppdata|mmpdata}`` lists active tenders as

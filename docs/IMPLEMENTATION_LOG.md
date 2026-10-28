@@ -128,3 +128,13 @@ times consecutively: 418 passed / 5 skipped / 0 failed, every time. Also run aga
   has no DOM for the existing CSS-selector helper; see the feature inventory for detail. Still
   single-page/single-request extraction only — no multi-page pagination/pipeline, no LLM-assisted
   extraction, matching every other provider's documented scope.
+- **CPPP live API investigation (2026-10-29)**: following up the earlier "portal migrated to a
+  JS SPA" finding, investigated via ordinary browser navigation (read-only, no CAPTCHA
+  solving/bypass, no secrets recorded) whether the SPA's own `/cpppapi` REST API could be used
+  instead. Finding: the listing endpoint itself (`getCpppCentralTenderGried`) now requires a
+  solved CAPTCHA to return non-empty results — a stricter access policy than the old portal,
+  where only a separate, unused search form had one. Full endpoint-by-endpoint evidence log in
+  docs/20_RISKS_AND_OPEN_QUESTIONS.md. No connector code change: this is a portal access-policy
+  restriction, not a parsing defect, and this project does not bypass CAPTCHAs. `cppp_central`
+  stays `unsupported`. No commit changes connector *behavior* — only documentation/docstrings
+  record the investigation's conclusion.

@@ -152,6 +152,12 @@ now feed real `TenderRecord`s into the same pipeline.
 - No provider was wired into the existing CPPP/GePNIC source configuration — those connectors
   remain on their own, already-verified path (`chanakya.connectors`); the new providers are an
   additional, independently-invokable capability, not a replacement.
+- CPPP's live portal was investigated 2026-10-29 and found `BLOCKED_BY_CAPTCHA`: its
+  listing/search endpoint now requires a solved CAPTCHA to return results (a portal policy
+  change, not a connector defect). Full evidence log in
+  docs/20_RISKS_AND_OPEN_QUESTIONS.md. None of the 9 acquisition providers were used as a
+  workaround — this project does not solve or bypass CAPTCHAs regardless of which retrieval
+  layer is used.
 - No contact discovery, sales prospecting, CRM integration, or multi-tenant feature was added.
 - No extraction-review or operational-analytics frontend page was built this phase — the job
   detail panel on `/providers` covers the same diagnostics for now (see commit `21b82b5`).
