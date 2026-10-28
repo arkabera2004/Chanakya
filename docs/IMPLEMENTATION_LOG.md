@@ -29,6 +29,8 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 | 2026-10-28 | `d18e9ed` | Pipeline integration tests (dedup, provenance, partial status) | `test_acquisition_pipeline_integration.py` | 3 new |
 | 2026-10-28 | `31f8039` | `/api/acquisition/analytics` endpoint | `desk_acquisition.py` | 2 new |
 | 2026-10-28 | `ff3faae` | Real operational-analytics panel on `/providers` | `providers/page.tsx`, `api-acquisition.ts` | `npm run build` clean; verified in a real browser against real backend data |
+| 2026-10-28 | `f1edb60` | Docs: reflect auth, recovery, analytics, integration tests | `docs/*.md` | n/a |
+| 2026-10-28 | `744711a` | Postgres parity: fixed 2 test files bypassing it, live-verified | `test_acquisition_job_manager.py`, `test_acquisition_pipeline_integration.py` | Full suite against real Postgres 17: 411 passed / 2 skipped / 0 failed |
 
 ## Outstanding limitations (honest, as of the last commit above)
 
@@ -49,9 +51,20 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
   (`app.api_token_env`, commit `99fc00d`) — opt-in, so local dev is unaffected until a token is
   configured. The rest of the desk API (`/api/opportunities`, `/api/brief`, etc.) is unchanged and
   still has no auth; extending the same gate there was out of scope for this phase.
-- **Postgres parity**: not re-tested this phase (no Postgres instance available in this
-  environment); the new migration `08b63b59322d` was only verified against SQLite. Carried over
-  from `CRAWLING_RELIABILITY_BACKLOG.md#CRAWL-008`.
+- **Postgres parity: CLOSED this phase.** Docker was available but not running; started it
+  (`open -a Docker`), ran a disposable `postgres:17-alpine` container
+  (`chanakya-pg-test`, not part of CI, torn down after verification), installed the
+  project's `postgres` extra (`psycopg`), and ran the full suite with
+  `CHANAKYA_TEST_DATABASE_URL` pointed at it: **411 passed, 2 skipped (unrelated — gated on a
+  local `config/chanakya.yaml`), 0 failed** (commit `744711a`). Found and fixed a real gap in
+  the process: `test_acquisition_job_manager.py` and
+  `test_acquisition_pipeline_integration.py` hardcoded SQLite, bypassing
+  `tests/dbsupport.py::isolated_database` entirely — so the acquisition job manager and the
+  dedup-integration tests had never actually run against Postgres even when the env var was
+  set. Fixed; both files now use the shared fixture like every other test file. SQLite-default
+  run reconfirmed unaffected (408/5/0, unchanged). Not yet run in CI against Postgres as a
+  standing job — this was a one-off manual verification; promoting it to always run in CI
+  (rather than the current separate `test-postgres` job) remains a decision, not done here.
 - **Demo database migration**: `data/demo/chanakya_demo.db` required `chanakya db upgrade` after
   the new migration was added — found during the real local run, not a code defect, and resolved
   before the local verification above.
