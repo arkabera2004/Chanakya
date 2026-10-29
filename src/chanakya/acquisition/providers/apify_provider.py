@@ -118,12 +118,18 @@ class ApifyProvider(AcquisitionProvider):
             if owns_client:
                 client.close()
 
-    def abort_run(self, run_id: str, *, client: httpx.Client | None = None) -> None:
+    def abort_run(self, run_id: str, *, client: httpx.Client | None = None) -> bool:
+        """Returns True only if Apify's API returned 2xx for the abort request — this is NOT
+        a guarantee the Actor has actually stopped (Apify's own run status transitions
+        through ABORTING before reaching the terminal ABORTED state), only that the request
+        to stop it was accepted. False on any error response; the caller should not assume
+        the remote run is unaffected, only that this call could not confirm it stopped."""
         token = self._token()
         owns_client = client is None
         client = client or httpx.Client(base_url=self.settings.base_url, timeout=self.settings.timeout_s)
         try:
-            client.post(f"/actor-runs/{run_id}/abort", params={"token": token})
+            resp = client.post(f"/actor-runs/{run_id}/abort", params={"token": token})
+            return resp.is_success
         finally:
             if owns_client:
                 client.close()
