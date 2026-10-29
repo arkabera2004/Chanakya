@@ -24,6 +24,7 @@ import tempfile
 from pathlib import Path
 
 from ...config import ScrapySettings
+from ...security import validate_url
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability
 from ..extraction import extract_by_selectors
 
@@ -57,6 +58,18 @@ class ScrapyProvider(AcquisitionProvider):
         return []
 
     def fetch(self, request: AcquisitionRequest) -> AcquisitionResult:
+        from ...config import HttpSettings
+
+        http_settings: HttpSettings = request.extra.get("http_settings") or HttpSettings()
+        try:
+            validate_url(request.url, http_settings.allowed_domains, resolve_dns=request.extra.get("resolve_dns", True),
+                         allow_http=request.extra.get("allow_http", False))
+        except Exception as exc:
+            return AcquisitionResult(
+                provider_id=self.provider_id, url=request.url, status="blocked",
+                error=str(exc), retryable=False,
+            )
+
         worker = Path(__file__).with_name("_scrapy_worker.py")
         with tempfile.TemporaryDirectory(prefix="chanakya-scrapy-") as tmp:
             out_path = Path(tmp) / "result.json"

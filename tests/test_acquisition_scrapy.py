@@ -56,14 +56,27 @@ def test_enabled_provider_with_package_installed_is_configured():
     assert _provider().is_configured() is True
 
 
-def test_successful_fetch_returns_body_and_status(local_server):
+def test_disallowed_domain_is_blocked_before_any_crawl(local_server):
+    # Default allowed_domains excludes 127.0.0.1 — proves the SSRF guard actually runs,
+    # not just that it's importable.
+    res = _provider().fetch(AcquisitionRequest(url=local_server, source_id="test"))
+    assert res.status == "blocked" and res.retryable is False
+
+
+def test_successful_fetch_returns_body_and_status(local_server, monkeypatch):
+    import chanakya.acquisition.providers.scrapy_provider as mod
+
+    monkeypatch.setattr(mod, "validate_url", lambda *a, **k: a[0])
     res = _provider().fetch(AcquisitionRequest(url=local_server, source_id="test"))
     assert res.status == "ok"
     assert "hello scrapy" in res.raw_content
     assert res.diagnostics["status_code"] == 200
 
 
-def test_selectors_extract_a_tender_record(local_server):
+def test_selectors_extract_a_tender_record(local_server, monkeypatch):
+    import chanakya.acquisition.providers.scrapy_provider as mod
+
+    monkeypatch.setattr(mod, "validate_url", lambda *a, **k: a[0])
     _Handler.body = b'<html><body><h1 class="title">Supply of Widgets</h1><span class="org">Synthetic Dept</span></body></html>'
     try:
         req = AcquisitionRequest(
@@ -78,7 +91,10 @@ def test_selectors_extract_a_tender_record(local_server):
         _Handler.body = b"<html><body>hello scrapy</body></html>"
 
 
-def test_403_is_classified_blocked(local_server):
+def test_403_is_classified_blocked(local_server, monkeypatch):
+    import chanakya.acquisition.providers.scrapy_provider as mod
+
+    monkeypatch.setattr(mod, "validate_url", lambda *a, **k: a[0])
     _Handler.status = 403
     try:
         res = _provider().fetch(AcquisitionRequest(url=local_server, source_id="test"))
@@ -87,7 +103,10 @@ def test_403_is_classified_blocked(local_server):
         _Handler.status = 200
 
 
-def test_503_is_classified_failed_and_retryable(local_server):
+def test_503_is_classified_failed_and_retryable(local_server, monkeypatch):
+    import chanakya.acquisition.providers.scrapy_provider as mod
+
+    monkeypatch.setattr(mod, "validate_url", lambda *a, **k: a[0])
     _Handler.status = 503
     try:
         res = _provider().fetch(AcquisitionRequest(url=local_server, source_id="test"))

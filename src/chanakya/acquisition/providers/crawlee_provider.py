@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 
 from ...config import CrawleeSettings
+from ...security import validate_url
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability
 from ..extraction import extract_by_selectors
 
@@ -47,6 +48,17 @@ class CrawleeProvider(AcquisitionProvider):
         return []
 
     def fetch(self, request: AcquisitionRequest) -> AcquisitionResult:
+        from ...config import HttpSettings
+
+        http_settings: HttpSettings = request.extra.get("http_settings") or HttpSettings()
+        try:
+            validate_url(request.url, http_settings.allowed_domains, resolve_dns=request.extra.get("resolve_dns", True),
+                         allow_http=request.extra.get("allow_http", False))
+        except Exception as exc:
+            return AcquisitionResult(
+                provider_id=self.provider_id, url=request.url, status="blocked",
+                error=str(exc), retryable=False,
+            )
         return asyncio.run(self._fetch_async(request))
 
     async def _fetch_async(self, request: AcquisitionRequest) -> AcquisitionResult:
