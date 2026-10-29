@@ -23,6 +23,7 @@ import httpx
 
 from ...config import ApifySettings, Settings
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability, ProviderConfigError
+from ..extraction import extract_by_items
 
 _TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"}
 _DATASET_PAGE_SIZE = 100
@@ -31,7 +32,9 @@ _MAX_DATASET_ITEMS = 10_000  # safety cap against unbounded memory growth from a
 
 class ApifyProvider(AcquisitionProvider):
     provider_id = "apify"
-    capabilities = frozenset({ProviderCapability.ACTOR_EXECUTION, ProviderCapability.MANAGED_CRAWL})
+    capabilities = frozenset({
+        ProviderCapability.ACTOR_EXECUTION, ProviderCapability.MANAGED_CRAWL, ProviderCapability.STRUCTURED_EXTRACTION,
+    })
     requires_credentials = True
 
     def __init__(self, settings: ApifySettings, *, secret_resolver=None) -> None:
@@ -182,9 +185,21 @@ class ApifyProvider(AcquisitionProvider):
                     error=f"HTTP {exc.response.status_code} retrieving dataset {dataset_id}", retryable=not blocked,
                     diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id},
                 )
+            records: list = []
+            diagnostics: dict = {"run_id": run.get("id"), "status": status, "dataset_id": dataset_id,
+                                 "item_count": len(items), "items": items}
+            item_fields: dict[str, str] = request.extra.get("item_fields", {})
+            if item_fields and items:
+                records, review = extract_by_items(
+                    items, item_fields, source_id=request.source_id,
+                    platform=request.extra.get("platform", "apify"), provider_id=self.provider_id,
+                )
+                if review:
+                    diagnostics["needs_review"] = review
+
             return AcquisitionResult(
                 provider_id=self.provider_id, url=request.url, status="ok",
-                diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id, "item_count": len(items), "items": items},
+                records=records, diagnostics=diagnostics,
             )
         finally:
             if owns_client:
