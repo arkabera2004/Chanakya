@@ -104,6 +104,34 @@ def test_disallowed_domain_is_blocked_before_any_navigation(local_server):
     assert res.status == "blocked"
 
 
+def test_a_redirect_to_an_off_allowlist_host_is_not_followed(local_server, monkeypatch):
+    """Playwright's page.goto() follows redirects inside the browser engine itself, before
+    this adapter's single pre-navigation validate_url call ever sees the intermediate hop.
+    A real per-hop guard must reject navigation to a disallowed redirect target, not just
+    the originally-requested URL."""
+    import chanakya.acquisition.providers.playwright_provider as mod
+
+    blocked_marker = "off-allowlist-redirect-target"
+
+    def fake_validate_url(url, *a, **k):
+        if blocked_marker in url:
+            from chanakya.security import SecurityError
+
+            raise SecurityError(f"off allowlist: {url}")
+        return url
+
+    monkeypatch.setattr(mod, "validate_url", fake_validate_url)
+    _Handler.redirect_to = f"{local_server}?{blocked_marker}"
+    try:
+        req = AcquisitionRequest(url=f"{local_server}redirect-start", source_id="test", extra={})
+        res = _provider().fetch(req)
+        assert res.status == "blocked", f"expected the redirect target to be rejected, got status={res.status!r}"
+        assert "Hello Playwright" not in (res.raw_content or ""), \
+            "content from the off-allowlist redirect target must never be returned as a successful result"
+    finally:
+        _Handler.redirect_to = None
+
+
 def test_server_error_status_is_classified_failed_and_retryable(local_server, monkeypatch):
     import chanakya.acquisition.providers.playwright_provider as mod
 
