@@ -155,7 +155,16 @@ class ApifyProvider(AcquisitionProvider):
                 )
 
             dataset_id = run.get("defaultDatasetId")
-            items = self.dataset_items(dataset_id, client=client) if dataset_id else []
+            try:
+                items = self.dataset_items(dataset_id, client=client) if dataset_id else []
+            except httpx.HTTPStatusError as exc:
+                blocked = exc.response.status_code in (401, 403)
+                return AcquisitionResult(
+                    provider_id=self.provider_id, url=request.url,
+                    status="blocked" if blocked else "failed",
+                    error=f"HTTP {exc.response.status_code} retrieving dataset {dataset_id}", retryable=not blocked,
+                    diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id},
+                )
             return AcquisitionResult(
                 provider_id=self.provider_id, url=request.url, status="ok",
                 diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id, "item_count": len(items), "items": items},
