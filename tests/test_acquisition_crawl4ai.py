@@ -116,6 +116,27 @@ def test_labels_extract_a_tender_record_from_real_markdown(local_server, monkeyp
         _Handler.body = b"<html><body><h1>Hello Crawl4AI with enough visible text content here</h1></body></html>"
 
 
+def test_the_result_url_reflects_the_real_post_redirect_destination(local_server, monkeypatch):
+    """crawl4ai's own CrawlResult already tracks the true final URL after any redirect
+    (``result.redirected_url``) — but the adapter was reporting request.url (the original,
+    pre-redirect URL) instead. That matters beyond cosmetics: the job manager's
+    _reclassify_offallowlist_redirects check (job_manager.py) relies on AcquisitionResult.url
+    being the real final destination to catch a redirect to an off-allowlist host; reporting
+    the original URL makes that check blind to every Crawl4AI redirect."""
+    import chanakya.acquisition.providers.crawl4ai_provider as mod
+
+    monkeypatch.setattr(mod, "validate_url", lambda *a, **k: a[0])
+    marker = "post-redirect-destination"
+    _Handler.redirect_to = f"{local_server}?{marker}"
+    try:
+        req = AcquisitionRequest(url=f"{local_server}redirect-start", source_id="test")
+        res = _provider().fetch(req)
+        assert res.status == "ok", res.error
+        assert marker in res.url, f"expected the real post-redirect URL, got {res.url!r}"
+    finally:
+        _Handler.redirect_to = None
+
+
 def test_503_is_classified_failed_and_retryable(local_server, monkeypatch):
     import chanakya.acquisition.providers.crawl4ai_provider as mod
 
