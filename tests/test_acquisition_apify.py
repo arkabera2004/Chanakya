@@ -192,3 +192,22 @@ def test_invalid_token_is_classified_blocked():
     req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
     res = _provider().fetch(req, client=client)
     assert res.status == "blocked" and res.retryable is False
+
+
+def test_abort_run_reports_whether_the_remote_run_actually_acknowledged_it():
+    """abort_run() currently has no return value at all and silently swallows every HTTP
+    status, including errors — a caller has no way to know whether a cancellation actually
+    reached the remote run or not. Not wired into job_manager yet (documented separately as
+    a known gap), but the method itself should at minimum report success/failure honestly so
+    a future caller isn't blind to it."""
+    def ok_handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"id": "run1", "status": "ABORTING"}})
+
+    def error_handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": {"type": "record-not-found"}})
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(ok_handler))
+    assert _provider().abort_run("run1", client=client) is True
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(error_handler))
+    assert _provider().abort_run("run1", client=client) is False
