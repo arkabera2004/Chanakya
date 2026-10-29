@@ -121,6 +121,16 @@ class AcquisitionProvider(ABC):
         those are represented in the returned ``AcquisitionResult.status``. May raise
         ``AcquisitionError`` for a configuration problem caught too late to validate upfront."""
 
+    def cancel_remote_run(self, request: AcquisitionRequest) -> bool | None:
+        """Best-effort request to stop remote work this provider started for ``request``,
+        when supported. Returns ``True`` if the provider's API acknowledged the stop request,
+        ``False`` if the request to stop actively failed, or ``None`` if this provider has no
+        remote run to cancel for this request (the default — most providers make their own
+        outbound call synchronously and have nothing left running once ``fetch()`` returns).
+        A ``True`` result means the stop request was accepted, never that the remote work has
+        actually ended."""
+        return None
+
     def health_check(self) -> dict[str, Any]:
         """Cheap, no-network-by-default status snapshot for the provider dashboard."""
         return {"provider_id": self.provider_id, "configured": self.is_configured()}

@@ -294,6 +294,55 @@ def test_cancel_requested_mid_run_is_not_reported_as_succeeded(db, monkeypatch):
         assert row.record_count in (0, None), "a cancelled job's would-be result must not be stored"
 
 
+def test_mid_run_cancellation_reaches_the_providers_remote_cancel_hook(db, monkeypatch):
+    """A provider that owns remote state (e.g. an Apify Actor run) needs a chance to stop it
+    when a job is cancelled mid-run. job_manager currently only ever flips a local DB flag —
+    it never calls AcquisitionProvider.cancel_remote_run(). This proves cancel_remote_run is
+    invoked with the same request the job ran, once cancellation is detected after fetch()
+    returns."""
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+
+    class _CancelsMidFlightProvider(AcquisitionProvider):
+        provider_id = "scrapling"
+        capabilities = frozenset({ProviderCapability.HTTP_FETCH})
+        requires_credentials = False
+
+        def __init__(self, settings, job_id_holder: dict, sf) -> None:
+            super().__init__(settings)
+            self._job_id_holder = job_id_holder
+            self._sf = sf
+            self.cancel_remote_run_calls = 0
+
+        def is_configured(self) -> bool:
+            return True
+
+        def fetch(self, request: AcquisitionRequest) -> AcquisitionResult:
+            with self._sf() as s:
+                row = s.get(AcquisitionJob, self._job_id_holder["id"])
+                row.cancel_requested = True
+                s.commit()
+            return AcquisitionResult(provider_id=self.provider_id, url=request.url, status="ok")
+
+        def cancel_remote_run(self, request: AcquisitionRequest) -> bool | None:
+            self.cancel_remote_run_calls += 1
+            return True
+
+    job_id_holder: dict = {}
+    stub = _CancelsMidFlightProvider(settings.scrapling, job_id_holder, db)
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)
+    jm = JobManager(db, settings, sleep=lambda s: None)
+
+    job = jm.create_job(provider_id="scrapling", url="https://x/")
+    job_id_holder["id"] = job.id
+    jm._run(job.id)
+
+    assert stub.cancel_remote_run_calls == 1, "a mid-run cancellation must call the provider's cancel_remote_run()"
+
+
 def test_cancel_before_run_prevents_execution(db, monkeypatch):
     jm, stub = _manager_with_stub(db, monkeypatch=monkeypatch)
     job = jm.create_job(provider_id="scrapling", url="https://x/")
