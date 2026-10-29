@@ -50,6 +50,46 @@ def test_a_malformed_start_run_response_is_a_diagnosed_failure_not_a_crash():
     assert res.retryable is False, "a malformed response schema must not be retried"
 
 
+def test_a_malformed_poll_response_is_a_diagnosed_failure_not_a_crash():
+    """Same gap as start_run, for run_status() in the polling loop: a 2xx response missing
+    the documented "data" key currently raises an unhandled KeyError straight out of fetch().
+    Unlike a network error during polling, a malformed response is a permanent problem with
+    the response shape itself — retrying the identical poll would not fix it — so this must
+    not be retryable, even though the run id is already known."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/actor-runs/run1":
+            return httpx.Response(200, json={"unexpected": "shape"})  # no "data" key
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor", "max_polls": 3})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is False, "a malformed poll response must not be retried"
+
+
+def test_a_malformed_dataset_response_is_a_diagnosed_failure_not_a_crash():
+    """Same gap as start_run/run_status, for dataset_items(): a 2xx response that isn't valid
+    JSON (unlike start_run/run_status, this endpoint returns a plain array, not a "data"
+    wrapper) currently raises an unhandled JSONDecodeError straight out of fetch(). The Actor
+    already SUCCEEDED and its run id is known, but a malformed response body is still a
+    permanent problem with this response, not a transient fault — not retryable."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/datasets/ds1/items":
+            return httpx.Response(200, content=b"not valid json")
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is False, "a malformed dataset response must not be retried"
+
+
 def test_a_timeout_starting_the_run_is_an_ambiguous_outcome_not_a_crash():
     """A connection/read timeout while starting a run means we genuinely do not know whether
     Apify created the run or not — the HTTP request may have been received and processed on
