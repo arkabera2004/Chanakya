@@ -21,8 +21,14 @@ pytest.importorskip("crawlee.crawlers")
 class _Handler(http.server.BaseHTTPRequestHandler):
     status = 200
     body = b"<html><body>hello crawlee</body></html>"
+    redirect_to: str | None = None  # when set, GET /redirect-start returns a 302 to this URL
 
     def do_GET(self):  # noqa: N802
+        if self.path == "/redirect-start" and self.redirect_to:
+            self.send_response(302)
+            self.send_header("Location", self.redirect_to)
+            self.end_headers()
+            return
         self.send_response(self.status)
         self.send_header("Content-Type", "text/html")
         self.end_headers()
