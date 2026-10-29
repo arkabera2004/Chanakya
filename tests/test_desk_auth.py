@@ -54,6 +54,14 @@ def test_cors_origins_are_configurable_and_default_to_localhost(desk):
         assert "access-control-allow-origin" not in disallowed.headers
 
 
+def test_every_response_carries_baseline_security_headers(desk):
+    with TestClient(create_app()) as client:
+        resp = client.get("/api/health")
+        assert resp.headers.get("x-content-type-options") == "nosniff"
+        assert resp.headers.get("x-frame-options") == "DENY"
+        assert resp.headers.get("referrer-policy") == "no-referrer"
+
+
 def test_configured_token_also_protects_acquisition_routes(desk, monkeypatch):
     """Confirms the single app-wide gate covers desk_acquisition.py too, now that its own
     router-level gate was removed in favor of this one (no regression from that change)."""

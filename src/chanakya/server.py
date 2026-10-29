@@ -689,6 +689,19 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next: Callable) -> Any:
+        """Baseline response headers every route gets, with no per-route opt-in needed.
+        This API serves only JSON (no HTML it renders itself), so there is no CSP to tune —
+        these three cover the browser-facing risk a JSON API still carries: a browser
+        sniffing a response as something executable, or this API being framed/leaked as a
+        referrer by a page that embeds it."""
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
