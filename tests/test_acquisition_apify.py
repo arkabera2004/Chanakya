@@ -72,6 +72,28 @@ def test_successful_run_returns_dataset_items():
     assert res.diagnostics["items"][0]["title"] == "Tender A"
 
 
+def test_dataset_items_are_converted_to_tender_records_when_item_fields_given():
+    """AcquisitionResult.records is never populated by fetch() — dataset items only ever
+    land in diagnostics. Apify is the only one of the 9 providers that produces no canonical
+    TenderRecords, even on a fully successful run with a field mapping supplied."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/datasets/ds1/items":
+            return httpx.Response(200, json=[{"pageTitle": "Tender A", "tenderRef": "T-1"}])
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(
+        url="https://x/", source_id="test",
+        extra={"actor_id": "my-actor", "item_fields": {"title": "pageTitle", "ref_no": "tenderRef"}},
+    )
+    res = _provider().fetch(req, client=client)
+    assert res.status == "ok"
+    assert len(res.records) == 1, "dataset items with a field mapping must produce real TenderRecords"
+    assert res.records[0].title == "Tender A" and res.records[0].ref_no == "T-1"
+
+
 def test_run_polls_until_terminal_status():
     calls = {"n": 0}
 
