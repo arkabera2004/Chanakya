@@ -122,6 +122,7 @@ def test_failed_run_is_classified_failed():
     req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
     res = _provider().fetch(req, client=client)
     assert res.status == "failed" and res.diagnostics["status"] == "FAILED"
+    assert res.retryable is False, "a real terminal Actor failure must stay non-retryable"
 
 
 def test_rate_limit_during_dataset_retrieval_is_classified_failed_and_retryable():
