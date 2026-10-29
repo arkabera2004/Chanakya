@@ -44,14 +44,17 @@ naive retry would otherwise start. This only helps across retries within one job
 that path is a deliberate "give up and restart" operation, not an in-flight retry.
 Confirmed by test (``test_retrying_a_still_running_actor_resumes_the_same_run_instead_of_starting_a_new_one``).
 
-Cancellation does NOT reach the remote Actor run — ``job_manager.cancel()`` only ever sets
-a local DB flag the job loop checks before and after its (single, blocking) call to
-``provider.fetch()``; it never calls this provider's own ``abort_run()``, for Apify or any
-other provider. Cancelling a Chanakya job while an Apify Actor is mid-run stops Chanakya
-from waiting on or storing that run's result, but the Actor itself keeps running (and
-billing) on Apify's infrastructure until it finishes or times out on its own. Do not assume
-otherwise; this is confirmed by inspection (no call site for ``abort_run`` exists anywhere
-in this codebase), not merely unverified.
+Cancellation: ``job_manager.cancel()`` sets a local DB flag that the job loop checks before
+the first attempt and after ``provider.fetch()`` returns (never during a call — there is no
+mechanism to interrupt a provider mid-call). When cancellation is detected after ``fetch()``
+returns, job_manager calls ``provider.cancel_remote_run(request)``; this provider's override
+calls ``abort_run()`` on the run id stored in ``request.extra["apify_run_id"]``, if one
+exists. That call only reports whether Apify's API *accepted* the stop request (``True``),
+not that the Actor has actually stopped — Apify's run status transitions through ABORTING
+before reaching the terminal ABORTED state, and this codebase does not poll to confirm that
+transition. Cancellation requested before any run has started, or after the run already
+reached a terminal state, is a no-op (``cancel_remote_run`` returns ``None`` when no run id
+is on the request). Do not assume a ``True`` result means billing has stopped.
 """
 
 from __future__ import annotations
@@ -138,6 +141,15 @@ class ApifyProvider(AcquisitionProvider):
         finally:
             if owns_client:
                 client.close()
+
+    def cancel_remote_run(self, request: AcquisitionRequest, *, client: httpx.Client | None = None) -> bool | None:
+        """Request Apify to stop the run started for this request, if one was. ``True``
+        means Apify's API accepted the abort request, not that the Actor has stopped yet —
+        see ``abort_run``'s own docstring."""
+        run_id = request.extra.get("apify_run_id")
+        if not run_id:
+            return None
+        return self.abort_run(run_id, client=client)
 
     def dataset_items(
         self, dataset_id: str, *, offset: int = 0, limit: int = 100, client: httpx.Client | None = None

@@ -240,7 +240,9 @@ class JobManager:
                 job = session.get(AcquisitionJob, job_id)
                 if job.cancel_requested:
                     job.status, job.finished_at, job.attempt = "cancelled", now_utc(), attempt
-                    _record_event(session, job_id, "cancelled", "cancel requested mid-run")
+                    remote_cancel_accepted = provider.cancel_remote_run(request)
+                    _record_event(session, job_id, "cancelled", "cancel requested mid-run",
+                                  {"remote_cancel_accepted": remote_cancel_accepted})
                     session.commit()
                     return
 

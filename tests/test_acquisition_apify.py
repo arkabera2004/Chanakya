@@ -287,3 +287,18 @@ def test_abort_run_reports_whether_the_remote_run_actually_acknowledged_it():
 
     client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(error_handler))
     assert _provider().abort_run("run1", client=client) is False
+
+
+def test_cancel_remote_run_aborts_the_stored_run_id():
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.path == "/v2/actor-runs/run1/abort"
+        return httpx.Response(200, json={"data": {"id": "run1", "status": "ABORTING"}})
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor", "apify_run_id": "run1"})
+    assert _provider().cancel_remote_run(req, client=client) is True
+
+
+def test_cancel_remote_run_is_a_no_op_without_a_stored_run_id():
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    assert _provider().cancel_remote_run(req) is None
