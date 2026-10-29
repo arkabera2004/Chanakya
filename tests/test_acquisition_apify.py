@@ -34,6 +34,25 @@ def test_fetch_requires_actor_id():
     assert res.status == "failed" and "actor_id" in res.error
 
 
+def test_a_timeout_starting_the_run_is_an_ambiguous_outcome_not_a_crash():
+    """A connection/read timeout while starting a run means we genuinely do not know whether
+    Apify created the run or not — the HTTP request may have been received and processed on
+    Apify's side even though the response never arrived. fetch() currently does not catch
+    this at all: httpx.TimeoutException propagates straight out of fetch(), which the real
+    job_manager path treats as an unexpected provider crash (logged at ERROR, generic
+    message) rather than a diagnosed, expected outcome. It must come back as a clean
+    AcquisitionResult, and — because retrying would risk starting a second (billable) Actor
+    run for an already-ambiguous first attempt — it must not be retryable."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timed out waiting for start_run response")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is False, "an ambiguous start_run timeout must not be retried (could start a duplicate run)"
+
+
 def test_dataset_items_beyond_the_first_page_are_not_silently_dropped():
     """fetch() calls dataset_items() exactly once with the default offset=0, limit=100 — a
     dataset with more than 100 items currently has the rest silently truncated with no
