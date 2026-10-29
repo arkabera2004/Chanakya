@@ -75,6 +75,46 @@ def test_dataset_items_beyond_the_first_page_are_not_silently_dropped():
     assert res.diagnostics["item_count"] == 150, f"expected all 150 items, got {res.diagnostics['item_count']}"
 
 
+def test_a_failure_on_the_first_dataset_page_is_reported_failed_not_an_empty_success():
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/datasets/ds1/items":
+            return httpx.Response(500, json={"error": {"type": "internal-error"}})
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed", "a failed first page must never be reported as a successful empty dataset"
+    assert res.retryable is True
+
+
+def test_a_failure_on_a_later_dataset_page_does_not_report_a_truncated_success():
+    """A real Actor failure can surface after several pages already came back fine — this
+    must still be reported as a failure (so the caller knows the dataset is incomplete), not
+    as an 'ok' result with whatever partial item count happened to be fetched before the
+    error, which would silently understate the dataset."""
+    page_one = [{"title": f"Tender {i}"} for i in range(100)]
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/datasets/ds1/items":
+            offset = int(req.url.params.get("offset", "0"))
+            if offset == 0:
+                return httpx.Response(200, json=page_one)
+            return httpx.Response(503, json={"error": {"type": "unavailable"}})
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed", "a later-page failure must not be reported as an (incomplete) success"
+    assert res.retryable is True
+    assert "items" not in res.diagnostics, "no partial item list should be presented as the result"
+
+
 def test_successful_run_returns_dataset_items():
     def handler(req: httpx.Request) -> httpx.Response:
         if req.url.path == "/v2/acts/my-actor/runs":
