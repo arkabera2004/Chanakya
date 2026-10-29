@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -688,6 +689,45 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Fixed-window counter per client (bearer token if auth is configured, else source IP),
+    # scoped to this app instance so repeated create_app() calls (every test file makes many)
+    # never share state. In-memory is correct for this project's single-process deployment
+    # model (same assumption the job manager and LLM budget guard already make); a multi-worker
+    # deployment would need a shared store instead.
+    rate_limit_state: dict[str, tuple[int, float]] = {}
+    rate_limit_lock = threading.Lock()
+    rate_limit_window_s = 60.0
+
+    def rate_limit_key(request: Request) -> str:
+        auth = request.headers.get("authorization")
+        if auth:
+            return auth
+        return request.client.host if request.client else "unknown"
+
+    def over_rate_limit(key: str, limit: int) -> float | None:
+        """None if the request is allowed; otherwise seconds until the window resets."""
+        now = time.monotonic()
+        with rate_limit_lock:
+            count, window_start = rate_limit_state.get(key, (0, now))
+            if now - window_start >= rate_limit_window_s:
+                count, window_start = 0, now
+            count += 1
+            rate_limit_state[key] = (count, window_start)
+            if count > limit:
+                return rate_limit_window_s - (now - window_start)
+        return None
+
+    @app.middleware("http")
+    async def rate_limit(request: Request, call_next: Callable) -> Any:
+        limit = settings.app.rate_limit_per_minute
+        if limit > 0 and request.method != "OPTIONS" and request.url.path != "/api/health":
+            retry_after = over_rate_limit(rate_limit_key(request), limit)
+            if retry_after is not None:
+                return PlainTextResponse(
+                    "Too Many Requests", status_code=429, headers={"Retry-After": str(int(retry_after) + 1)},
+                )
+        return await call_next(request)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next: Callable) -> Any:

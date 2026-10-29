@@ -48,6 +48,10 @@ class AppSettings(_Strict):
     # dev addresses next's dev server binds to; override with the real frontend origin(s) before
     # exposing the desk beyond localhost — never widen this to "*" for a token-protected desk.
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"])
+    # Requests allowed per client (bearer token if auth is configured, else source IP) per
+    # rolling 60s window, enforced by server.py's rate-limit middleware. 0 disables limiting
+    # (e.g. for local development or a trusted internal network).
+    rate_limit_per_minute: int = 300
 
 
 class HttpSettings(_Strict):

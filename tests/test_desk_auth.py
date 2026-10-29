@@ -54,6 +54,30 @@ def test_cors_origins_are_configurable_and_default_to_localhost(desk):
         assert "access-control-allow-origin" not in disallowed.headers
 
 
+def test_rate_limit_returns_429_with_retry_after_once_exceeded(desk):
+    desk.app.rate_limit_per_minute = 3
+    with TestClient(create_app()) as client:
+        for _ in range(3):
+            client.get("/api/brief")
+        blocked = client.get("/api/brief")
+        assert blocked.status_code == 429
+        assert "retry-after" in {k.lower() for k in blocked.headers.keys()}
+
+
+def test_rate_limit_zero_disables_limiting(desk):
+    desk.app.rate_limit_per_minute = 0
+    with TestClient(create_app()) as client:
+        for _ in range(10):
+            assert client.get("/api/brief").status_code == 200
+
+
+def test_health_is_exempt_from_rate_limiting(desk):
+    desk.app.rate_limit_per_minute = 2
+    with TestClient(create_app()) as client:
+        for _ in range(5):
+            assert client.get("/api/health").status_code == 200
+
+
 def test_every_response_carries_baseline_security_headers(desk):
     with TestClient(create_app()) as client:
         resp = client.get("/api/health")
