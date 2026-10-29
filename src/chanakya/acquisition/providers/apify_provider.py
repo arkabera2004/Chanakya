@@ -62,6 +62,7 @@ in this codebase), not merely unverified.
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import httpx
@@ -82,9 +83,10 @@ class ApifyProvider(AcquisitionProvider):
     })
     requires_credentials = True
 
-    def __init__(self, settings: ApifySettings, *, secret_resolver=None) -> None:
+    def __init__(self, settings: ApifySettings, *, secret_resolver=None, sleep=time.sleep) -> None:
         super().__init__(settings)
         self._secret_resolver = secret_resolver or Settings().secret
+        self._sleep = sleep
 
     def _token(self) -> str | None:
         return self._secret_resolver(self.settings.api_key_env)
@@ -203,8 +205,10 @@ class ApifyProvider(AcquisitionProvider):
 
             status = run.get("status")
             max_polls = request.extra.get("max_polls", 1)  # default: do not actually poll in fetch()
+            poll_interval_s = request.extra.get("poll_interval_s", self.settings.poll_interval_s)
             polls = 0
             while status not in _TERMINAL_STATUSES and polls < max_polls:
+                self._sleep(poll_interval_s)
                 try:
                     run = self.run_status(run["id"], client=client)
                 except httpx.HTTPStatusError as exc:

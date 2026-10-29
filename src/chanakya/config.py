@@ -321,6 +321,7 @@ class ApifySettings(_Strict):
     base_url: str = "https://api.apify.com/v2"
     timeout_s: float = 60.0
     max_retries: int = 2
+    poll_interval_s: float = 2.0
 
 
 class BrowserlessSettings(_Strict):

@@ -16,7 +16,7 @@ from chanakya.config import ApifySettings
 
 
 def _provider(enabled: bool = True, token: str | None = "apify-test-token") -> ApifyProvider:
-    return ApifyProvider(ApifySettings(enabled=enabled), secret_resolver=lambda _env: token)
+    return ApifyProvider(ApifySettings(enabled=enabled), secret_resolver=lambda _env: token, sleep=lambda s: None)
 
 
 def test_disabled_provider_is_not_configured():
