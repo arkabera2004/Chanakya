@@ -270,6 +270,15 @@ class ApifyProvider(AcquisitionProvider):
                     return self._result_for_http_error(
                         exc, request, context=f"while polling run {run['id']}", diagnostics={"run_id": run.get("id")},
                     )
+                except httpx.TransportError as exc:
+                    # Unlike a start_run timeout, this is an idempotent read against an
+                    # already-known run — safe to retry, and the run id is preserved so a
+                    # retry resumes polling the same run instead of starting a new one.
+                    return AcquisitionResult(
+                        provider_id=self.provider_id, url=request.url, status="failed",
+                        error=f"{type(exc).__name__} while polling run {run['id']}", retryable=True,
+                        diagnostics={"run_id": run.get("id")},
+                    )
                 status = run.get("status")
                 polls += 1
 
@@ -294,6 +303,14 @@ class ApifyProvider(AcquisitionProvider):
             except httpx.HTTPStatusError as exc:
                 return self._result_for_http_error(
                     exc, request, context=f"retrieving dataset {dataset_id}",
+                    diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id},
+                )
+            except httpx.TransportError as exc:
+                # The Actor already reached a terminal state; only dataset retrieval failed.
+                # Retrying is a safe, idempotent read of the same dataset_id/run_id.
+                return AcquisitionResult(
+                    provider_id=self.provider_id, url=request.url, status="failed",
+                    error=f"{type(exc).__name__} retrieving dataset {dataset_id}", retryable=True,
                     diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id},
                 )
             records: list = []
