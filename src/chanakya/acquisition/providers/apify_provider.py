@@ -25,6 +25,8 @@ from ...config import ApifySettings, Settings
 from ..contract import AcquisitionProvider, AcquisitionRequest, AcquisitionResult, ProviderCapability, ProviderConfigError
 
 _TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"}
+_DATASET_PAGE_SIZE = 100
+_MAX_DATASET_ITEMS = 10_000  # safety cap against unbounded memory growth from a misbehaving Actor
 
 
 class ApifyProvider(AcquisitionProvider):
@@ -104,6 +106,21 @@ class ApifyProvider(AcquisitionProvider):
             if owns_client:
                 client.close()
 
+    def _all_dataset_items(self, dataset_id: str, *, client: httpx.Client) -> list[dict[str, Any]]:
+        """Paginated dataset_items(): Apify returns at most one page per call, so a single
+        call silently truncates any dataset larger than that page. Keeps requesting pages
+        until one comes back shorter than requested (end of dataset) or the safety cap is
+        reached — never unbounded."""
+        items: list[dict[str, Any]] = []
+        offset = 0
+        while offset < _MAX_DATASET_ITEMS:
+            page = self.dataset_items(dataset_id, offset=offset, limit=_DATASET_PAGE_SIZE, client=client)
+            items.extend(page)
+            if len(page) < _DATASET_PAGE_SIZE:
+                break
+            offset += _DATASET_PAGE_SIZE
+        return items
+
     def fetch(self, request: AcquisitionRequest, *, client: httpx.Client | None = None) -> AcquisitionResult:
         """Poll-to-completion wrapper: starts a run (actor id + input in ``request.extra``),
         polls until terminal, then returns the dataset items as diagnostics. The job manager
@@ -156,7 +173,7 @@ class ApifyProvider(AcquisitionProvider):
 
             dataset_id = run.get("defaultDatasetId")
             try:
-                items = self.dataset_items(dataset_id, client=client) if dataset_id else []
+                items = self._all_dataset_items(dataset_id, client=client) if dataset_id else []
             except httpx.HTTPStatusError as exc:
                 blocked = exc.response.status_code in (401, 403)
                 return AcquisitionResult(
