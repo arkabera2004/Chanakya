@@ -20,8 +20,14 @@ pytest.importorskip("playwright.sync_api")
 class _Handler(http.server.BaseHTTPRequestHandler):
     body = b"<html><body><h1 id='t'>Hello Playwright</h1></body></html>"
     status = 200
+    redirect_to: str | None = None  # when set, GET /redirect-start returns a 302 to this URL
 
     def do_GET(self):  # noqa: N802 (stdlib API name)
+        if self.path == "/redirect-start" and self.redirect_to:
+            self.send_response(302)
+            self.send_header("Location", self.redirect_to)
+            self.end_headers()
+            return
         self.send_response(self.status)
         self.send_header("Content-Type", "text/html")
         self.end_headers()
