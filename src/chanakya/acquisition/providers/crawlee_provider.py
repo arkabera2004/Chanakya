@@ -85,7 +85,11 @@ class CrawleeProvider(AcquisitionProvider):
         async def handler(context: HttpCrawlingContext) -> None:
             body = await context.http_response.read()
             outcome["status"] = "ok"
-            outcome["url"] = context.request.url
+            # loaded_url is the true URL after any redirect; request.url stays the original.
+            # job_manager.py's _reclassify_offallowlist_redirects relies on this being the
+            # real final destination to catch a redirect to a host this project never
+            # approved — reporting the original URL would make that check blind to it.
+            outcome["url"] = context.request.loaded_url or context.request.url
             outcome["status_code"] = context.http_response.status_code
             outcome["content"] = body.decode("utf-8", errors="replace")
 
