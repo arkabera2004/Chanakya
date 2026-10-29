@@ -97,6 +97,29 @@ def test_selectors_extract_a_tender_record(local_server, monkeypatch):
         _Handler.body = b"<html><body>hello scrapy</body></html>"
 
 
+def test_a_redirect_is_followed_to_its_real_content(local_server, monkeypatch):
+    """handle_httpstatus_list = list(range(300, 600)) in _scrapy_worker.py was meant to let
+    4xx/5xx responses reach parse() instead of being silently dropped — but it also makes
+    Scrapy's RedirectMiddleware skip 3xx codes entirely, so the spider receives the raw 302
+    instead of following it. This is a correctness bug, not just a security gap: any tender
+    listing/detail page reached via a redirect (a common pattern) would currently report
+    'ok' with the redirect response itself (no real content) instead of the real page."""
+    import chanakya.acquisition.providers.scrapy_provider as mod
+
+    monkeypatch.setattr(mod, "validate_url", lambda *a, **k: a[0])
+    marker = "post-redirect-destination"
+    _Handler.redirect_to = f"{local_server}?{marker}"
+    try:
+        req = AcquisitionRequest(url=f"{local_server}redirect-start", source_id="test")
+        res = _provider().fetch(req)
+        assert res.status == "ok"
+        assert marker in res.url, f"expected the real post-redirect URL, got {res.url!r}"
+        assert "hello scrapy" in (res.raw_content or ""), \
+            f"expected the real page content after the redirect, got {res.raw_content!r}"
+    finally:
+        _Handler.redirect_to = None
+
+
 def test_403_is_classified_blocked(local_server, monkeypatch):
     import chanakya.acquisition.providers.scrapy_provider as mod
 
