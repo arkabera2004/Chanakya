@@ -134,7 +134,16 @@ class ApifyProvider(AcquisitionProvider):
             max_polls = request.extra.get("max_polls", 1)  # default: do not actually poll in fetch()
             polls = 0
             while status not in _TERMINAL_STATUSES and polls < max_polls:
-                run = self.run_status(run["id"], client=client)
+                try:
+                    run = self.run_status(run["id"], client=client)
+                except httpx.HTTPStatusError as exc:
+                    blocked = exc.response.status_code in (401, 403)
+                    return AcquisitionResult(
+                        provider_id=self.provider_id, url=request.url,
+                        status="blocked" if blocked else "failed",
+                        error=f"HTTP {exc.response.status_code} while polling run {run['id']}", retryable=not blocked,
+                        diagnostics={"run_id": run.get("id")},
+                    )
                 status = run.get("status")
                 polls += 1
 
