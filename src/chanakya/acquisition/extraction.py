@@ -151,3 +151,73 @@ def extract_by_labels(
         raw={k: v for k, v in found.items()},
     )
     return [record], needs_review
+
+
+def extract_by_items(
+    items: list[dict],
+    field_map: dict[str, str],
+    *,
+    source_id: str,
+    platform: str = "acquisition",
+    provider_id: str = "acquisition",
+) -> tuple[list[TenderRecord], list[dict]]:
+    """Deterministic field-mapping extraction for providers that already return structured
+    records (one dict per tender) instead of HTML or Markdown — currently only Apify's
+    dataset items. ``field_map`` maps a TenderRecord field name to the key that holds it in
+    each item, e.g. ``{"title": "pageTitle", "ref_no": "tenderRef"}``. There is no fixed
+    Apify dataset schema (it depends on which Actor produced it), so this is caller-supplied
+    per job rather than hardcoded, the same design as ``extract_by_labels``'s label synonyms.
+
+    Unlike the single-record extractors, ``items`` can hold many tenders per call. Returns
+    ``(records, items_needing_review)`` — one review entry per item missing a title, not
+    merged into a single dict, so each skipped item stays traceable to its own raw data.
+    """
+    records: list[TenderRecord] = []
+    needs_review: list[dict] = []
+
+    for item in items:
+        extracted: dict[str, object] = {}
+        item_review: dict[str, object] = {}
+        for field_name, key in field_map.items():
+            raw_value = item.get(key)
+            if field_name in _DATE_FIELDS:
+                parsed = parse_portal_datetime(str(raw_value)) if raw_value else None
+                extracted[field_name] = parsed
+                if raw_value and parsed is None:
+                    item_review[field_name] = raw_value
+            elif field_name in _AMOUNT_FIELDS:
+                parsed = parse_inr_amount(str(raw_value)) if raw_value else None
+                extracted[field_name] = parsed
+                if raw_value and parsed is None:
+                    item_review[field_name] = raw_value
+            else:
+                extracted[field_name] = raw_value
+
+        if not extracted.get("title"):
+            item_review.update({k: v for k, v in extracted.items() if k not in item_review})
+            item_review.setdefault("title", None)
+            needs_review.append(item_review)
+            continue
+
+        url = extracted.get("detail_url") or extracted.get("official_url")
+        records.append(TenderRecord(
+            source_id=source_id,
+            platform=platform,
+            source_record_key=extracted.get("tender_id") or extracted.get("ref_no") or url or extracted["title"],
+            source_tender_id=extracted.get("tender_id"),
+            ref_no=extracted.get("ref_no"),
+            title=extracted["title"],
+            organisation=extracted.get("organisation"),
+            department=extracted.get("department"),
+            location=extracted.get("location"),
+            published_at=extracted.get("published_at"),
+            closing_at=extracted.get("closing_at"),
+            opening_at=extracted.get("opening_at"),
+            estimated_value_inr=extracted.get("estimated_value_inr"),
+            emd_inr=extracted.get("emd_inr"),
+            detail_url=url,
+            evidence=f"{provider_id} item extraction of {url}" if url else f"{provider_id} item extraction",
+            raw=item,
+        ))
+
+    return records, needs_review
