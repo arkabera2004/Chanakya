@@ -25,7 +25,12 @@ def _run(url: str, out_path: str) -> None:
 
     class _OneRequestSpider(scrapy.Spider):
         name = "chanakya_one_request"
-        handle_httpstatus_list = list(range(300, 600))
+        # 400-599 only: lets 4xx/5xx responses reach parse() instead of being silently
+        # dropped. 300-399 must stay OUT of this list — Scrapy's RedirectMiddleware only
+        # follows a redirect automatically when the spider does NOT claim to handle that
+        # status itself; including 3xx here made every redirect report "ok" with the raw
+        # redirect response (no real content) instead of being followed.
+        handle_httpstatus_list = list(range(400, 600))
 
         async def start(self):
             yield scrapy.Request(url, callback=self.parse, errback=self.on_error, dont_filter=True)
