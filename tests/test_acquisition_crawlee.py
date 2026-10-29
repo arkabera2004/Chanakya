@@ -109,6 +109,28 @@ def test_selectors_extract_a_tender_record(local_server, monkeypatch):
         _Handler.body = b"<html><body>hello crawlee</body></html>"
 
 
+def test_the_result_url_reflects_the_real_post_redirect_destination(local_server, monkeypatch):
+    """Crawlee's own context.request already exposes the true final URL after any redirect
+    (``loaded_url``, distinct from ``url`` which stays the original) — but the adapter was
+    reporting ``context.request.url`` instead. That matters beyond cosmetics: the job
+    manager's _reclassify_offallowlist_redirects check (job_manager.py) relies on
+    AcquisitionResult.url being the real final destination to catch a redirect to an
+    off-allowlist host; reporting the original URL makes that check blind to every Crawlee
+    redirect."""
+    import chanakya.acquisition.providers.crawlee_provider as mod
+
+    monkeypatch.setattr(mod, "validate_url", lambda *a, **k: a[0])
+    marker = "post-redirect-destination"
+    _Handler.redirect_to = f"{local_server}?{marker}"
+    try:
+        req = AcquisitionRequest(url=f"{local_server}redirect-start", source_id="test")
+        res = _provider().fetch(req)
+        assert res.status == "ok"
+        assert marker in res.url, f"expected the real post-redirect URL, got {res.url!r}"
+    finally:
+        _Handler.redirect_to = None
+
+
 def test_403_is_classified_blocked(local_server, monkeypatch):
     import chanakya.acquisition.providers.crawlee_provider as mod
 
