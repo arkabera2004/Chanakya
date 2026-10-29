@@ -298,6 +298,41 @@ def test_missing_actor_is_classified_failed_and_not_retryable():
     assert res.retryable is False, "a 404 (missing Actor) must not be retried"
 
 
+def test_rate_limited_start_run_is_retryable_and_retry_after_is_captured():
+    """A 429 is transient (retryable), and the server's own Retry-After header is Apify's
+    explicit guidance for how long to wait — currently discarded entirely."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, headers={"Retry-After": "7"}, json={"error": {"type": "rate-limit-exceeded"}})
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed" and res.retryable is True
+    assert res.diagnostics["retry_after_s"] == 7.0
+
+
+def test_server_error_during_start_run_is_classified_failed_and_retryable():
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"error": {"type": "unavailable"}})
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed" and res.retryable is True
+
+
+def test_conflict_during_start_run_is_classified_failed_and_not_retryable():
+    """A 409 means the request conflicts with the Actor/run's current state — not a transient
+    fault, and nothing about retrying the identical request resolves a conflict."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(409, json={"error": {"type": "actor-is-not-runnable"}})
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed" and res.retryable is False
+
+
 def test_abort_run_reports_whether_the_remote_run_actually_acknowledged_it():
     """abort_run() currently has no return value at all and silently swallows every HTTP
     status, including errors — a caller has no way to know whether a cancellation actually
