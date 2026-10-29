@@ -34,6 +34,28 @@ def test_fetch_requires_actor_id():
     assert res.status == "failed" and "actor_id" in res.error
 
 
+def test_dataset_items_beyond_the_first_page_are_not_silently_dropped():
+    """fetch() calls dataset_items() exactly once with the default offset=0, limit=100 — a
+    dataset with more than 100 items currently has the rest silently truncated with no
+    error or indication anything was lost."""
+    all_items = [{"title": f"Tender {i}"} for i in range(150)]
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/datasets/ds1/items":
+            offset = int(req.url.params.get("offset", "0"))
+            limit = int(req.url.params.get("limit", "100"))
+            return httpx.Response(200, json=all_items[offset:offset + limit])
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "ok"
+    assert res.diagnostics["item_count"] == 150, f"expected all 150 items, got {res.diagnostics['item_count']}"
+
+
 def test_successful_run_returns_dataset_items():
     def handler(req: httpx.Request) -> httpx.Response:
         if req.url.path == "/v2/acts/my-actor/runs":
