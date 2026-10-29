@@ -116,6 +116,36 @@ def test_a_still_running_actor_when_the_poll_budget_is_exhausted_is_retryable():
     assert res.retryable is True, "a still-RUNNING Actor must be retryable, not a permanent failure"
 
 
+def test_retrying_a_still_running_actor_resumes_the_same_run_instead_of_starting_a_new_one():
+    """job_manager's outer retry loop calls fetch() again on the SAME AcquisitionRequest
+    object after a retryable failure (see job_manager._run: one `request` is built once,
+    before the `while True` retry loop). A still-running Actor is retryable (previous test),
+    but fetch() has no memory of the run it already started — a second call currently calls
+    start_run() again, starting a brand-new, separately billable Actor run that never
+    completes either. The fix must store the run id on `request.extra` (the one piece of
+    job-specific state already threaded through every attempt) so a retry resumes polling
+    the existing run instead."""
+    starts = {"n": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            starts["n"] += 1
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/actor-runs/run1":
+            return httpx.Response(200, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    provider = _provider()
+
+    first = provider.fetch(req, client=client)
+    assert first.retryable is True
+
+    provider.fetch(req, client=client)  # simulates job_manager's retry: same request object
+    assert starts["n"] == 1, f"expected the retry to resume run1, but start_run was called {starts['n']} times"
+
+
 def test_run_polls_until_terminal_status():
     calls = {"n": 0}
 
