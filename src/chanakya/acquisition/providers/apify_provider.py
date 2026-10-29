@@ -29,6 +29,26 @@ exposure in the way a local-fetch provider's unvalidated redirect would be. What
 unaddressed: nothing stops a job creator from directing Apify's infrastructure at an
 arbitrary external target via ``run_input``; that is a third-party-service-abuse concern,
 not covered by this change.
+
+Job-manager retry and long-running Actors — KNOWN, UNRESOLVED LIMITATION: job_manager.py
+calls this provider's blocking ``fetch()`` exactly like every other provider, with no
+awareness of Apify's async start/poll/cancel model. ``fetch()``'s own polling loop
+(``max_polls``, default 1) only waits within a single call; a still-RUNNING Actor when that
+budget is exhausted is (correctly) classified ``retryable=True`` — it is not a real failure.
+But job_manager's retry does not resume polling the SAME run: it calls ``fetch()`` again
+from scratch, which calls ``start_run()`` again, starting a brand-new (separately billable)
+Actor run. Confirmed directly: two retried attempts against a still-running mock start two
+distinct run ids and spend two runs' worth of compute, never actually completing either.
+This is a real instance of "retrying a non-idempotent operation creates duplicate remote
+work" (job_manager carries no state —  such as the previous attempt's run id — forward
+across a retry, and the registry's cached provider instance is shared across concurrent job
+threads, so it cannot safely hold that state itself either). No safe fix exists within this
+provider alone; it needs job_manager to either pass the prior attempt's run id back into
+the retried request's ``extra``, or to treat ACTOR_EXECUTION-capable providers differently
+in its retry policy — both are job_manager changes, out of scope for a provider-level fix.
+**Until that exists, the only safe way to use this provider for anything that takes more
+than a few seconds is a single call with a generously large ``max_polls``, not relying on
+job_manager's outer retry.**
 """
 
 from __future__ import annotations
