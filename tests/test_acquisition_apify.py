@@ -80,6 +80,23 @@ def test_failed_run_is_classified_failed():
     assert res.status == "failed" and res.diagnostics["status"] == "FAILED"
 
 
+def test_rate_limit_during_dataset_retrieval_is_classified_failed_and_retryable():
+    """Same gap as run_status() polling, for the final dataset_items() call: a SUCCEEDED
+    run whose dataset retrieval hits a 429 currently raises unhandled instead of being
+    reported as a transient, retryable failure."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/datasets/ds1/items":
+            return httpx.Response(429, json={"error": {"type": "rate-limit-exceeded"}})
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed" and res.retryable is True
+
+
 def test_rate_limit_during_polling_is_classified_failed_and_retryable():
     """start_run() already classifies a 429 correctly (status != 401/403 -> failed,
     retryable=True) — but run_status(), called in the polling loop, is not wrapped in any
