@@ -34,6 +34,22 @@ def test_fetch_requires_actor_id():
     assert res.status == "failed" and "actor_id" in res.error
 
 
+def test_a_malformed_start_run_response_is_a_diagnosed_failure_not_a_crash():
+    """A 2xx response whose body doesn't match Apify's documented schema (missing "data", or
+    not valid JSON at all) currently raises an unhandled KeyError/JSONDecodeError straight out
+    of fetch() — the same "unexpected provider crash" problem as an uncaught timeout. This is
+    a permanent problem with the response itself; retrying the identical request would not
+    produce a different schema, so it must not be retryable."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(201, json={"unexpected": "shape"})  # no "data" key
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is False, "a malformed response schema must not be retried"
+
+
 def test_a_timeout_starting_the_run_is_an_ambiguous_outcome_not_a_crash():
     """A connection/read timeout while starting a run means we genuinely do not know whether
     Apify created the run or not — the HTTP request may have been received and processed on
