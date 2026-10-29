@@ -184,9 +184,17 @@ class ApifyProvider(AcquisitionProvider):
                 polls += 1
 
             if status != "SUCCEEDED":
+                # A real terminal failure (FAILED/ABORTED) is permanent — retrying would just
+                # fail again. TIMED-OUT is Apify's own transient classification. A status
+                # that's still not in _TERMINAL_STATUSES means the Actor is genuinely still
+                # running and this call's local poll budget simply ran out — that is NOT a
+                # failure of the Actor, and must stay retryable so the job manager's own
+                # outer retry loop gives it another attempt later, not give up permanently.
+                still_running = status not in _TERMINAL_STATUSES
                 return AcquisitionResult(
                     provider_id=self.provider_id, url=request.url, status="failed",
-                    error=f"apify run ended with status {status}", retryable=status in ("TIMED-OUT",),
+                    error=f"apify run ended with status {status}",
+                    retryable=still_running or status in ("TIMED-OUT",),
                     diagnostics={"run_id": run.get("id"), "status": status},
                 )
 
