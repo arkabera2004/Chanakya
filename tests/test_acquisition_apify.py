@@ -80,6 +80,26 @@ def test_failed_run_is_classified_failed():
     assert res.status == "failed" and res.diagnostics["status"] == "FAILED"
 
 
+def test_rate_limit_during_polling_is_classified_failed_and_retryable():
+    """start_run() already classifies a 429 correctly (status != 401/403 -> failed,
+    retryable=True) — but run_status(), called in the polling loop, is not wrapped in any
+    error handling at all. A 429 (or any HTTP error) while polling currently propagates as
+    an unhandled httpx.HTTPStatusError out of fetch(), which the real job-manager path
+    catches generically as a provider bug (retryable=False) — losing the fact that a rate
+    limit is genuinely transient and should be retried."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/actor-runs/run1":
+            return httpx.Response(429, json={"error": {"type": "rate-limit-exceeded"}})
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor", "max_polls": 3})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed" and res.retryable is True
+
+
 def test_invalid_token_is_classified_blocked():
     def handler(req: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"error": {"type": "token-not-provided"}})
