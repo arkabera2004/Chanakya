@@ -91,13 +91,19 @@ class Crawl4AIProvider(AcquisitionProvider):
             )
 
         markdown = result.markdown.raw_markdown if hasattr(result.markdown, "raw_markdown") else str(result.markdown)
+        # crawl4ai already tracks the true URL after any redirect; report that instead of the
+        # original request URL. job_manager.py's _reclassify_offallowlist_redirects relies on
+        # this field being the real final destination to catch a redirect to a host this
+        # project never approved — reporting the original URL would make that check blind to
+        # every Crawl4AI redirect.
+        final_url = result.redirected_url or request.url
 
         records: list = []
         diagnostics: dict = {"status_code": status_code}
         labels: dict[str, list[str]] = request.extra.get("labels", {})
         if labels and markdown:
             records, review = extract_by_labels(
-                markdown, labels, source_id=request.source_id, url=request.url,
+                markdown, labels, source_id=request.source_id, url=final_url,
                 platform=request.extra.get("platform", "crawl4ai"), provider_id=self.provider_id,
             )
             diagnostics["extracted"] = review if review else (records[0].raw if records else {})
@@ -105,7 +111,7 @@ class Crawl4AIProvider(AcquisitionProvider):
                 diagnostics["needs_review"] = review
 
         return AcquisitionResult(
-            provider_id=self.provider_id, url=request.url, status="ok",
+            provider_id=self.provider_id, url=final_url, status="ok",
             records=records, raw_content=markdown, content_type="text/markdown",
             diagnostics=diagnostics,
         )
