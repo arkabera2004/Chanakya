@@ -72,6 +72,15 @@ _TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"}
 _DATASET_PAGE_SIZE = 100
 _MAX_DATASET_ITEMS = 10_000  # safety cap against unbounded memory growth from a misbehaving Actor
 
+# HTTP status classification, consistent across start_run/run_status/dataset_items:
+#   401/403 -> blocked (auth/authorization; a policy boundary, never retried)
+#   408/429/5xx -> failed, retryable (transient: request timeout, rate limit, upstream fault)
+#   everything else (400, 404, 409, or any other code) -> failed, not retryable. A 400/404/409
+#   means THIS request is wrong (bad input, missing actor/run/dataset, conflicting state) —
+#   repeating it unchanged would just fail the same way again. An unrecognised code defaults
+#   to not-retryable too: retrying is never assumed safe for a status this code doesn't know.
+_TRANSIENT_HTTP_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+
 
 class ApifyProvider(AcquisitionProvider):
     provider_id = "apify"
@@ -142,6 +151,29 @@ class ApifyProvider(AcquisitionProvider):
             if owns_client:
                 client.close()
 
+    def _result_for_http_error(
+        self, exc: httpx.HTTPStatusError, request: AcquisitionRequest, *, context: str, diagnostics: dict | None = None
+    ) -> AcquisitionResult:
+        code = exc.response.status_code
+        if code in (401, 403):
+            status, retryable = "blocked", False
+        elif code in _TRANSIENT_HTTP_STATUS_CODES:
+            status, retryable = "failed", True
+        else:
+            status, retryable = "failed", False
+        diag = dict(diagnostics or {})
+        if code == 429:
+            retry_after = exc.response.headers.get("Retry-After")
+            if retry_after is not None:
+                try:
+                    diag["retry_after_s"] = float(retry_after)
+                except ValueError:
+                    pass
+        return AcquisitionResult(
+            provider_id=self.provider_id, url=request.url, status=status,
+            error=f"HTTP {code} {context}", retryable=retryable, diagnostics=diag,
+        )
+
     def cancel_remote_run(self, request: AcquisitionRequest, *, client: httpx.Client | None = None) -> bool | None:
         """Request Apify to stop the run started for this request, if one was. ``True``
         means Apify's API accepted the abort request, not that the Actor has stopped yet —
@@ -210,12 +242,7 @@ class ApifyProvider(AcquisitionProvider):
             except ProviderConfigError:
                 raise
             except httpx.HTTPStatusError as exc:
-                blocked = exc.response.status_code in (401, 403)
-                return AcquisitionResult(
-                    provider_id=self.provider_id, url=request.url,
-                    status="blocked" if blocked else "failed",
-                    error=f"HTTP {exc.response.status_code}", retryable=not blocked,
-                )
+                return self._result_for_http_error(exc, request, context="starting/resuming the run")
 
             status = run.get("status")
             max_polls = request.extra.get("max_polls", 1)  # default: do not actually poll in fetch()
@@ -226,12 +253,8 @@ class ApifyProvider(AcquisitionProvider):
                 try:
                     run = self.run_status(run["id"], client=client)
                 except httpx.HTTPStatusError as exc:
-                    blocked = exc.response.status_code in (401, 403)
-                    return AcquisitionResult(
-                        provider_id=self.provider_id, url=request.url,
-                        status="blocked" if blocked else "failed",
-                        error=f"HTTP {exc.response.status_code} while polling run {run['id']}", retryable=not blocked,
-                        diagnostics={"run_id": run.get("id")},
+                    return self._result_for_http_error(
+                        exc, request, context=f"while polling run {run['id']}", diagnostics={"run_id": run.get("id")},
                     )
                 status = run.get("status")
                 polls += 1
@@ -255,11 +278,8 @@ class ApifyProvider(AcquisitionProvider):
             try:
                 items = self._all_dataset_items(dataset_id, client=client) if dataset_id else []
             except httpx.HTTPStatusError as exc:
-                blocked = exc.response.status_code in (401, 403)
-                return AcquisitionResult(
-                    provider_id=self.provider_id, url=request.url,
-                    status="blocked" if blocked else "failed",
-                    error=f"HTTP {exc.response.status_code} retrieving dataset {dataset_id}", retryable=not blocked,
+                return self._result_for_http_error(
+                    exc, request, context=f"retrieving dataset {dataset_id}",
                     diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id},
                 )
             records: list = []
