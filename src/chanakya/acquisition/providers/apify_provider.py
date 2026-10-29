@@ -243,6 +243,20 @@ class ApifyProvider(AcquisitionProvider):
                 raise
             except httpx.HTTPStatusError as exc:
                 return self._result_for_http_error(exc, request, context="starting/resuming the run")
+            except httpx.TransportError as exc:
+                # A network/connect/read timeout while STARTING a run is genuinely ambiguous:
+                # Apify may have received and processed the request even though the response
+                # never arrived, and there is no run id yet to resume. Retrying blindly risks
+                # starting a second, separately billable Actor run for an already-ambiguous
+                # first attempt — so, unlike the same error during polling or dataset
+                # retrieval (both idempotent reads against an already-known run), this stays
+                # non-retryable. A resumed poll (resume_run_id truthy) carries no such
+                # ambiguity about duplicate creation, but is treated the same way here for
+                # simplicity since a timeout mid-resume gives no new information either.
+                return AcquisitionResult(
+                    provider_id=self.provider_id, url=request.url, status="failed",
+                    error=f"{type(exc).__name__} starting/resuming the run", retryable=False,
+                )
 
             status = run.get("status")
             max_polls = request.extra.get("max_polls", 1)  # default: do not actually poll in fetch()
