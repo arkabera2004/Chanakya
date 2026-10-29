@@ -257,6 +257,14 @@ class ApifyProvider(AcquisitionProvider):
                     provider_id=self.provider_id, url=request.url, status="failed",
                     error=f"{type(exc).__name__} starting/resuming the run", retryable=False,
                 )
+            except (KeyError, ValueError) as exc:
+                # The response didn't match Apify's documented schema (missing "data"/"id",
+                # or not valid JSON) — a permanent problem with the response, not a transient
+                # fault. Retrying the identical request would not produce a different schema.
+                return AcquisitionResult(
+                    provider_id=self.provider_id, url=request.url, status="failed",
+                    error=f"malformed response starting/resuming the run: {type(exc).__name__}", retryable=False,
+                )
 
             status = run.get("status")
             max_polls = request.extra.get("max_polls", 1)  # default: do not actually poll in fetch()
