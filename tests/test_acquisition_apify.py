@@ -270,6 +270,34 @@ def test_invalid_token_is_classified_blocked():
     assert res.status == "blocked" and res.retryable is False
 
 
+def test_invalid_actor_input_is_classified_failed_and_not_retryable():
+    """A 400 means the request itself (the Actor input) is malformed — retrying the exact
+    same request will just fail the exact same way again. The current blocked-vs-not
+    classification treats every non-401/403 status as retryable, so a 400 is currently (and
+    incorrectly) retried just like a 500 would be."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"type": "invalid-input", "message": "bad run_input"}})
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is False, "a 400 (malformed Actor input) must not be retried"
+
+
+def test_missing_actor_is_classified_failed_and_not_retryable():
+    """A 404 on start_run means the actor_id itself doesn't exist — a permanent configuration
+    problem, not a transient fault. Currently misclassified as retryable=True."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": {"type": "actor-not-found"}})
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "does-not-exist"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is False, "a 404 (missing Actor) must not be retried"
+
+
 def test_abort_run_reports_whether_the_remote_run_actually_acknowledged_it():
     """abort_run() currently has no return value at all and silently swallows every HTTP
     status, including errors — a caller has no way to know whether a cancellation actually
