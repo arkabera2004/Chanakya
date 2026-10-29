@@ -28,7 +28,11 @@ class _StubProvider(AcquisitionProvider):
         return True
 
     def fetch(self, request: AcquisitionRequest) -> AcquisitionResult:
-        return AcquisitionResult(provider_id=self.provider_id, url=request.url, status="ok")
+        # Report success from an allowlisted host, not request.url verbatim — these tests use
+        # "https://x/" as a placeholder job URL, and the job manager now reclassifies an "ok"
+        # result whose final URL is off the host allowlist as blocked (redirect-SSRF guard;
+        # see test_acquisition_job_manager.py for that behavior's own test).
+        return AcquisitionResult(provider_id=self.provider_id, url="https://eprocure.gov.in/tender/1", status="ok")
 
 
 @pytest.fixture

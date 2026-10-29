@@ -58,6 +58,10 @@ def _manager(sf, records: list[TenderRecord], monkeypatch) -> JobManager:
     import chanakya.acquisition.job_manager as mod
 
     monkeypatch.setattr(mod, "registry", registry)
+    # Not real SSRF validation here — these tests use a stub provider returning
+    # "https://x/" to exercise storage/dedup/provenance behavior (covered separately by
+    # test_acquisition_crawlee.py / test_acquisition_scrapy.py).
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
     return JobManager(sf, settings, sleep=lambda s: None)
 
 

@@ -59,6 +59,9 @@ def test_an_acquisition_sourced_opportunity_is_assessed_scored_and_prioritized(s
     import chanakya.acquisition.job_manager as mod
 
     monkeypatch.setattr(mod, "registry", registry)
+    # Not real SSRF validation here — "https://x/" exercises the assessment handoff, not
+    # the allowlist (covered separately by test_acquisition_crawlee.py / test_acquisition_scrapy.py).
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
 
     engine = make_engine(settings.app.database_url)
     jm = JobManager(session_factory(engine), acq_settings, sleep=lambda s: None)

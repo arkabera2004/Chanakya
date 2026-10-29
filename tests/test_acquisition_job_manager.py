@@ -62,6 +62,11 @@ def _manager_with_stub(sf, outcomes=None, *, monkeypatch=None) -> tuple[JobManag
 
     assert monkeypatch is not None, "pass the test's monkeypatch fixture"
     monkeypatch.setattr(mod, "registry", registry)
+    # These tests exercise job-lifecycle behavior with a stub provider returning
+    # "https://x/" results — not real SSRF validation (covered by
+    # test_acquisition_crawlee.py / test_acquisition_scrapy.py), so the redirect-allowlist
+    # reclassification added for that is turned off here.
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
     return jm, stub
 
 
@@ -90,6 +95,11 @@ def test_create_job_for_disabled_provider_fails_without_running(db, monkeypatch)
     import chanakya.acquisition.job_manager as mod
 
     monkeypatch.setattr(mod, "registry", registry)
+    # These tests exercise job-lifecycle behavior with a stub provider returning
+    # "https://x/" results — not real SSRF validation (covered by
+    # test_acquisition_crawlee.py / test_acquisition_scrapy.py), so the redirect-allowlist
+    # reclassification added for that is turned off here.
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
     jm = JobManager(db, settings)
     job = jm.create_job(provider_id="scrapling", url="https://x/")
     assert job.status == "failed"
@@ -149,6 +159,11 @@ def test_retry_backoff_is_jittered_and_bounded(db, monkeypatch):
     import chanakya.acquisition.job_manager as mod
 
     monkeypatch.setattr(mod, "registry", registry)
+    # These tests exercise job-lifecycle behavior with a stub provider returning
+    # "https://x/" results — not real SSRF validation (covered by
+    # test_acquisition_crawlee.py / test_acquisition_scrapy.py), so the redirect-allowlist
+    # reclassification added for that is turned off here.
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
     sleeps: list[float] = []
     jm = JobManager(db, settings, max_attempts=3, sleep=sleeps.append)
 
@@ -174,6 +189,49 @@ def test_a_200_ok_captcha_page_is_reclassified_as_blocked(db, monkeypatch):
     row = _wait_terminal(db, job.id)
     assert row.status == "failed" and row.retryable is False
     assert row.diagnostics["blocked_reason"] == "captcha_in_body"
+
+
+def test_a_result_from_an_off_allowlist_redirect_is_reclassified_as_blocked(db, monkeypatch):
+    """A provider's own library can follow a redirect to a host this project never approved
+    for the request (only PoliteClient re-validates every hop itself) — the job manager must
+    not trust or store content that ended up coming from an off-allowlist host, even though
+    it cannot un-send the outbound request that already happened."""
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+    stub = _StubProvider(settings.scrapling, [
+        AcquisitionResult(provider_id="scrapling", url="https://169.254.169.254/latest/meta-data/", status="ok",
+                          raw_content="internal metadata", content_type="text/plain"),
+    ])
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)  # intentionally NOT bypassing _reclassify_offallowlist_redirects
+    jm = JobManager(db, settings, sleep=lambda s: None)
+
+    job = jm.create_job(provider_id="scrapling", url="https://eprocure.gov.in/x")
+    jm.submit(job.id)
+    row = _wait_terminal(db, job.id)
+    assert row.status == "failed" and row.retryable is False
+    assert row.diagnostics["blocked_reason"] == "redirect_off_allowlist"
+    assert row.record_count in (0, None)
+
+
+def test_a_result_from_an_allowed_host_is_not_blocked(db, monkeypatch):
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+    stub = _StubProvider(settings.scrapling, [
+        AcquisitionResult(provider_id="scrapling", url="https://eprocure.gov.in/tender/1", status="ok"),
+    ])
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)
+    jm = JobManager(db, settings, sleep=lambda s: None)
+
+    job = jm.create_job(provider_id="scrapling", url="https://eprocure.gov.in/x")
+    jm.submit(job.id)
+    row = _wait_terminal(db, job.id)
+    assert row.status == "succeeded"
 
 
 def test_blocked_result_is_never_retried(db, monkeypatch):
@@ -227,6 +285,11 @@ def test_orphaned_running_job_is_recovered_on_manager_startup(db, monkeypatch):
     import chanakya.acquisition.job_manager as mod
 
     monkeypatch.setattr(mod, "registry", registry)
+    # These tests exercise job-lifecycle behavior with a stub provider returning
+    # "https://x/" results — not real SSRF validation (covered by
+    # test_acquisition_crawlee.py / test_acquisition_scrapy.py), so the redirect-allowlist
+    # reclassification added for that is turned off here.
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
 
     jm1 = JobManager(db, settings)
     job = jm1.create_job(provider_id="scrapling", url="https://x/")

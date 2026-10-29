@@ -19,9 +19,10 @@ import uuid
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session, sessionmaker
 
-from ..config import AcquisitionProvidersSettings
+from ..config import AcquisitionProvidersSettings, HttpSettings
 from ..connectors.base import has_captcha
 from ..db import AcquisitionJob, AcquisitionJobEvent
+from ..security import SecurityError, validate_url
 from ..timeutil import now_utc
 from .contract import AcquisitionRequest, ProviderCapability
 from .registry import registry
@@ -45,6 +46,31 @@ def _reclassify_captcha_pages(result):
             error="CAPTCHA or access-restriction content detected in a 200 OK response",
             retryable=False,
             diagnostics={**result.diagnostics, "blocked_reason": "captcha_in_body"},
+        )
+    return result
+
+
+def _reclassify_offallowlist_redirects(result, request: AcquisitionRequest):
+    """``AcquisitionResult.url`` is each provider's own report of the URL it actually ended
+    up fetching — after any redirects the provider's underlying library followed on its own.
+    Only ``PoliteClient`` (used by the scrapling adapter and the CPPP/GePNIC connectors)
+    re-validates every redirect hop against the host allowlist itself; the other providers
+    rely on their own library's HTTP/browser client, which may follow a redirect to a host
+    this project would never have approved for the initial request. This cannot un-send that
+    outbound request, but it stops Chanakya from trusting and storing content that ended up
+    coming from an off-allowlist host — the actual exploitable consequence for a pipeline
+    that persists and later displays what it fetches."""
+    if result.status != "ok" or not result.url:
+        return result
+    http_settings: HttpSettings = request.extra.get("http_settings") or HttpSettings()
+    try:
+        validate_url(result.url, http_settings.allowed_domains, resolve_dns=False, allow_http=True)
+    except SecurityError as exc:
+        return dataclasses.replace(
+            result, status="blocked", records=[],
+            error=f"final URL after redirects is off the host allowlist: {exc}",
+            retryable=False,
+            diagnostics={**result.diagnostics, "blocked_reason": "redirect_off_allowlist"},
         )
     return result
 
@@ -199,7 +225,7 @@ class JobManager:
         attempt = 1
         while True:
             try:
-                result = _reclassify_captcha_pages(provider.fetch(request))
+                result = _reclassify_offallowlist_redirects(_reclassify_captcha_pages(provider.fetch(request)), request)
             except Exception as exc:  # a provider bug, not an expected ok/blocked/failed outcome
                 logger.exception("acquisition job %s: provider %s raised unexpectedly", job_id, provider_id)
                 with self._session_factory() as session:
