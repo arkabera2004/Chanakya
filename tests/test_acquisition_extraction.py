@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from chanakya.acquisition.extraction import extract_by_labels, extract_by_selectors
+from chanakya.acquisition.extraction import extract_by_items, extract_by_labels, extract_by_selectors
 
 
 def test_extracts_mapped_fields_into_a_tender_record():
@@ -97,3 +97,34 @@ def test_source_record_key_falls_back_to_ref_no_then_url():
     markdown = "Title: Supply of Widgets\n"
     records, _ = extract_by_labels(markdown, _LABELS, source_id="test", url="https://x/tender/7")
     assert records[0].source_record_key == "https://x/tender/7"
+
+
+_ITEM_FIELDS = {"title": "pageTitle", "ref_no": "tenderRef", "detail_url": "url", "estimated_value_inr": "value"}
+
+
+def test_extract_by_items_maps_structured_dataset_records():
+    items = [
+        {"pageTitle": "Supply of Widgets", "tenderRef": "T-42", "url": "https://x/1", "value": "Rs. 5 Lakh"},
+        {"pageTitle": "Supply of Gadgets", "tenderRef": "T-43", "url": "https://x/2"},
+    ]
+    records, review = extract_by_items(items, _ITEM_FIELDS, source_id="test", provider_id="apify")
+    assert review == []
+    assert len(records) == 2
+    assert records[0].title == "Supply of Widgets" and records[0].ref_no == "T-42"
+    assert records[0].estimated_value_inr == 500000.0
+    assert records[0].source_record_key == "T-42"
+    assert records[0].evidence == "apify item extraction of https://x/1"
+    assert records[1].estimated_value_inr is None
+
+
+def test_extract_by_items_keeps_items_missing_a_title_for_review_not_guessed():
+    items = [{"tenderRef": "T-42"}, {"pageTitle": "Supply of Widgets", "tenderRef": "T-43"}]
+    records, review = extract_by_items(items, _ITEM_FIELDS, source_id="test", provider_id="apify")
+    assert len(records) == 1 and records[0].ref_no == "T-43"
+    assert len(review) == 1
+    assert review[0]["ref_no"] == "T-42" and review[0]["title"] is None
+
+
+def test_extract_by_items_returns_empty_for_an_empty_dataset():
+    records, review = extract_by_items([], _ITEM_FIELDS, source_id="test", provider_id="apify")
+    assert records == [] and review == []
