@@ -146,6 +146,27 @@ def test_retrying_a_still_running_actor_resumes_the_same_run_instead_of_starting
     assert starts["n"] == 1, f"expected the retry to resume run1, but start_run was called {starts['n']} times"
 
 
+def test_resuming_a_confirmed_terminal_run_does_not_start_a_new_one():
+    """If request.extra already carries an apify_run_id from a prior attempt and that run has
+    since reached a real terminal state (FAILED here), resuming must just report the terminal
+    outcome via run_status() — never fall back to start_run() and create a second run."""
+    starts = {"n": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            starts["n"] += 1
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/actor-runs/run1":
+            return httpx.Response(200, json={"data": {"id": "run1", "status": "FAILED", "defaultDatasetId": None}})
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor", "apify_run_id": "run1"})
+    res = _provider().fetch(req, client=client)
+    assert starts["n"] == 0, "a confirmed terminal run must never trigger a new start_run()"
+    assert res.status == "failed" and res.retryable is False
+
+
 def test_run_polls_until_terminal_status():
     calls = {"n": 0}
 
