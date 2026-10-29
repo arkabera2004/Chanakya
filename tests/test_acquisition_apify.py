@@ -279,6 +279,46 @@ def test_rate_limit_during_polling_is_classified_failed_and_retryable():
     assert res.status == "failed" and res.retryable is True
 
 
+def test_a_network_error_while_polling_an_already_started_run_is_retryable():
+    """Unlike a timeout starting a run, a network error while POLLING an already-known run
+    is an idempotent read — retrying it cannot create a duplicate Actor run, and the stored
+    run id lets a retry resume polling the same run. fetch() currently does not catch
+    httpx.TransportError at all during polling, so this escapes as an unhandled exception and
+    is reported (via job_manager's generic handler) as a permanent, non-retryable failure —
+    needlessly abandoning a run that may well still be running or have already finished."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/actor-runs/run1":
+            raise httpx.ReadTimeout("timed out polling run1")
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor", "max_polls": 3})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is True, "a network error polling a known, idempotent run must stay retryable"
+    assert res.diagnostics.get("run_id") == "run1", "the known run id must survive the error so a retry can resume it"
+
+
+def test_a_network_error_retrieving_the_dataset_is_retryable_and_keeps_the_run_id():
+    """Same reasoning as polling: the Actor already SUCCEEDED and its run id is known, so a
+    network error fetching its dataset is safely retryable without risking a duplicate run."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/datasets/ds1/items":
+            raise httpx.ConnectError("connection reset retrieving dataset")
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is True
+    assert res.diagnostics.get("run_id") == "run1"
+
+
 def test_invalid_token_is_classified_blocked():
     def handler(req: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"error": {"type": "token-not-provided"}})
