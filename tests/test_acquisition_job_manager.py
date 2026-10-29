@@ -244,6 +244,97 @@ def test_blocked_result_is_never_retried(db, monkeypatch):
     assert row.status == "failed" and row.retryable is False and stub.calls == 1
 
 
+def test_a_run_id_stashed_on_request_extra_survives_the_managers_own_retry_loop(db, monkeypatch):
+    """Mirrors Apify's run-resumption pattern at the job_manager level (not just directly on
+    the provider): a stub that behaves like Apify — stores an id on request.extra on its
+    first call, and asserts on later calls that the id is still there — proves job_manager's
+    retry loop really does reuse the SAME request object across attempts, not a fresh one."""
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+
+    class _StashesRunIdProvider(AcquisitionProvider):
+        provider_id = "scrapling"
+        capabilities = frozenset({ProviderCapability.HTTP_FETCH})
+        requires_credentials = False
+
+        def __init__(self, settings) -> None:
+            super().__init__(settings)
+            self.calls = 0
+
+        def is_configured(self) -> bool:
+            return True
+
+        def fetch(self, request: AcquisitionRequest) -> AcquisitionResult:
+            self.calls += 1
+            if self.calls == 1:
+                assert "run_id" not in request.extra
+                request.extra["run_id"] = "run-abc"
+                return AcquisitionResult(provider_id=self.provider_id, url=request.url, status="failed",
+                                          error="still running", retryable=True)
+            assert request.extra.get("run_id") == "run-abc", "the retry must see the run id the first attempt stashed"
+            return AcquisitionResult(provider_id=self.provider_id, url=request.url, status="ok")
+
+    stub = _StashesRunIdProvider(settings.scrapling)
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
+    jm = JobManager(db, settings, max_attempts=3, sleep=lambda s: None)
+
+    job = jm.create_job(provider_id="scrapling", url="https://x/")
+    jm.submit(job.id)
+    row = _wait_terminal(db, job.id)
+    assert row.status == "succeeded" and stub.calls == 2
+
+
+def test_retry_creates_a_job_with_a_fresh_extra_not_the_failed_jobs_run_id(db, monkeypatch):
+    """job_manager.retry() creates an entirely new AcquisitionJob row (a deliberate restart,
+    not an in-flight retry) — its extra must start empty, never inheriting a run id a prior,
+    now-failed job had stashed, which would be a different job's remote state."""
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+
+    class _RecordsExtraSeenProvider(AcquisitionProvider):
+        provider_id = "scrapling"
+        capabilities = frozenset({ProviderCapability.HTTP_FETCH})
+        requires_credentials = False
+
+        def __init__(self, settings) -> None:
+            super().__init__(settings)
+            self.seen_extras: list[dict] = []
+
+        def is_configured(self) -> bool:
+            return True
+
+        def fetch(self, request: AcquisitionRequest) -> AcquisitionResult:
+            self.seen_extras.append(dict(request.extra))
+            if len(self.seen_extras) == 1:
+                request.extra["run_id"] = "run-from-first-job"
+                return AcquisitionResult(provider_id=self.provider_id, url=request.url, status="failed",
+                                          error="permanent", retryable=True)
+            return AcquisitionResult(provider_id=self.provider_id, url=request.url, status="ok")
+
+    stub = _RecordsExtraSeenProvider(settings.scrapling)
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
+    jm = JobManager(db, settings, max_attempts=1, sleep=lambda s: None)  # exhaust after one attempt
+
+    job = jm.create_job(provider_id="scrapling", url="https://x/")
+    jm.submit(job.id)
+    _wait_terminal(db, job.id)
+
+    retried = jm.retry(job.id)
+    assert retried is not None
+    jm.submit(retried.id)
+    _wait_terminal(db, retried.id)
+
+    assert stub.seen_extras[1] == {}, "the retried job's request must not inherit the failed job's run id"
+
+
 def test_cancel_requested_mid_run_is_not_reported_as_succeeded(db, monkeypatch):
     """job_manager only checks cancel_requested before the first attempt and after the
     provider's blocking fetch() call returns — never during it (confirmed by inspection:
