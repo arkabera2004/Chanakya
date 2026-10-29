@@ -30,6 +30,7 @@ from .registry import registry
 logger = logging.getLogger("chanakya.acquisition.job_manager")
 
 _TERMINAL_STATUSES = {"succeeded", "partial", "failed", "cancelled"}
+_MAX_RETRY_AFTER_S = 120  # cap on honoring a provider-reported retry_after_s, against a bad/malicious value
 
 
 def _reclassify_captcha_pages(result):
@@ -278,7 +279,15 @@ class JobManager:
             attempt += 1
             # Full jitter (AWS-style): uniform(0, backoff) avoids synchronized retry storms
             # across jobs when a provider is overloaded.
-            self._sleep(random.uniform(0, min(2 ** attempt, 10)))
+            jittered_backoff = random.uniform(0, min(2 ** attempt, 10))
+            # A provider can report the server's own explicit wait time (e.g. Apify
+            # forwarding a 429's Retry-After header) — honor it as a floor rather than
+            # retrying sooner than the server asked, but cap it so a bad/malicious value
+            # can't stall this thread indefinitely.
+            retry_after = result.diagnostics.get("retry_after_s")
+            if isinstance(retry_after, (int, float)) and retry_after > 0:
+                jittered_backoff = max(jittered_backoff, min(retry_after, _MAX_RETRY_AFTER_S))
+            self._sleep(jittered_backoff)
 
     def _store_records(self, session: Session, result, source_id: str | None) -> dict:
         from ..pipeline import store
