@@ -136,6 +136,31 @@ def test_run_polls_until_terminal_status():
     assert res.status == "ok" and calls["n"] == 2
 
 
+def test_polling_waits_between_attempts_instead_of_hammering_the_api():
+    """The polling loop currently has no delay between iterations at all — a caller who sets
+    max_polls high enough to actually wait for a real Actor (the only safe way to use this
+    provider today, per the module docstring) would hammer GET /actor-runs/{id} back-to-back
+    as fast as the network allows, for every poll. Injects a sleep spy (same DI pattern
+    job_manager itself already uses) to prove a delay is requested between polls."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/actor-runs/run1":
+            return httpx.Response(200, json={"data": {"id": "run1", "status": "SUCCEEDED", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/datasets/ds1/items":
+            return httpx.Response(200, json=[])
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    sleeps: list[float] = []
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    provider = ApifyProvider(ApifySettings(enabled=True), secret_resolver=lambda _env: "tok", sleep=sleeps.append)
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor", "max_polls": 3})
+    res = provider.fetch(req, client=client)
+    assert res.status == "ok"
+    assert sleeps, "expected at least one sleep between the start-run status check and the first poll"
+    assert all(s > 0 for s in sleeps)
+
+
 def test_failed_run_is_classified_failed():
     def handler(req: httpx.Request) -> httpx.Response:
         return httpx.Response(201, json={"data": {"id": "run1", "status": "FAILED", "defaultDatasetId": None}})
