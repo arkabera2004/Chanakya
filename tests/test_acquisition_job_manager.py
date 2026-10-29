@@ -174,6 +174,33 @@ def test_retry_backoff_is_jittered_and_bounded(db, monkeypatch):
     assert sleeps and all(0 <= s <= 10 for s in sleeps)
 
 
+def test_retry_after_from_a_retryable_result_is_honored_as_a_backoff_floor(db, monkeypatch):
+    """A provider (e.g. Apify on a 429) can report diagnostics["retry_after_s"] — the
+    server's own explicit guidance for how long to wait before retrying. job_manager
+    currently ignores it entirely and always uses its own jittered backoff (bounded at 10s),
+    which can retry well before the server asked it to."""
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+    stub = _StubProvider(settings.scrapling, outcomes=[
+        AcquisitionResult(provider_id="scrapling", url="https://x/", status="failed", error="rate limited",
+                           retryable=True, diagnostics={"retry_after_s": 37.0}),
+        AcquisitionResult(provider_id="scrapling", url="https://x/", status="ok"),
+    ])
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)
+    monkeypatch.setattr(mod, "_reclassify_offallowlist_redirects", lambda result, request: result)
+    sleeps: list[float] = []
+    jm = JobManager(db, settings, max_attempts=3, sleep=sleeps.append)
+
+    job = jm.create_job(provider_id="scrapling", url="https://x/")
+    jm.submit(job.id)
+    _wait_terminal(db, job.id)
+
+    assert sleeps and sleeps[0] >= 37.0, f"expected the backoff to honor retry_after_s=37, got {sleeps[0]}"
+
+
 def test_a_200_ok_captcha_page_is_reclassified_as_blocked(db, monkeypatch):
     """A provider can get a clean 200 whose body is a CAPTCHA challenge, not real content —
     the job manager must not report this as a successful acquisition."""
