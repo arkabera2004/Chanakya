@@ -49,6 +49,15 @@ in its retry policy — both are job_manager changes, out of scope for a provide
 **Until that exists, the only safe way to use this provider for anything that takes more
 than a few seconds is a single call with a generously large ``max_polls``, not relying on
 job_manager's outer retry.**
+
+Cancellation does NOT reach the remote Actor run — ``job_manager.cancel()`` only ever sets
+a local DB flag the job loop checks before and after its (single, blocking) call to
+``provider.fetch()``; it never calls this provider's own ``abort_run()``, for Apify or any
+other provider. Cancelling a Chanakya job while an Apify Actor is mid-run stops Chanakya
+from waiting on or storing that run's result, but the Actor itself keeps running (and
+billing) on Apify's infrastructure until it finishes or times out on its own. Do not assume
+otherwise; this is confirmed by inspection (no call site for ``abort_run`` exists anywhere
+in this codebase), not merely unverified.
 """
 
 from __future__ import annotations
