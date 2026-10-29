@@ -94,6 +94,28 @@ def test_dataset_items_are_converted_to_tender_records_when_item_fields_given():
     assert res.records[0].title == "Tender A" and res.records[0].ref_no == "T-1"
 
 
+def test_a_still_running_actor_when_the_poll_budget_is_exhausted_is_retryable():
+    """A run that is still genuinely RUNNING — not FAILED, ABORTED, or TIMED-OUT — just
+    hasn't finished within this call's local max_polls budget. That is categorically
+    different from a real terminal failure and must stay retryable, so the job manager's
+    own outer retry loop gets another attempt (and more wall-clock time) later. This matters
+    most on the real job-manager path, which creates jobs without an explicit max_polls
+    override (fetch()'s own default is 1) — so every real Apify Actor that takes any time to
+    run currently hits exactly this path."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/v2/acts/my-actor/runs":
+            return httpx.Response(201, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        if req.url.path == "/v2/actor-runs/run1":
+            return httpx.Response(200, json={"data": {"id": "run1", "status": "RUNNING", "defaultDatasetId": "ds1"}})
+        raise AssertionError(f"unexpected path {req.url.path}")
+
+    client = httpx.Client(base_url="https://api.apify.com/v2", transport=httpx.MockTransport(handler))
+    req = AcquisitionRequest(url="https://x/", source_id="test", extra={"actor_id": "my-actor"})  # default max_polls=1
+    res = _provider().fetch(req, client=client)
+    assert res.status == "failed"
+    assert res.retryable is True, "a still-RUNNING Actor must be retryable, not a permanent failure"
+
+
 def test_run_polls_until_terminal_status():
     calls = {"n": 0}
 
