@@ -244,6 +244,56 @@ def test_blocked_result_is_never_retried(db, monkeypatch):
     assert row.status == "failed" and row.retryable is False and stub.calls == 1
 
 
+def test_cancel_requested_mid_run_is_not_reported_as_succeeded(db, monkeypatch):
+    """job_manager only checks cancel_requested before the first attempt and after the
+    provider's blocking fetch() call returns — never during it (confirmed by inspection:
+    there is no mechanism to interrupt a provider mid-call). This test exercises the
+    after-fetch-returns check: a cancellation that arrives while the provider call is in
+    flight (simulated by setting cancel_requested from inside fetch() itself, the only
+    deterministic way to land in that exact window) must still end the job 'cancelled', even
+    though the provider's own result was a genuine success — a cancelled job must never be
+    reported as succeeded, and a would-be-successful result must not be silently stored."""
+    settings = AcquisitionProvidersSettings(scrapling=ScraplingSettings(enabled=True))
+
+    class _CancelsMidFlightProvider(AcquisitionProvider):
+        provider_id = "scrapling"
+        capabilities = frozenset({ProviderCapability.HTTP_FETCH})
+        requires_credentials = False
+
+        def __init__(self, settings, job_id_holder: dict, sf) -> None:
+            super().__init__(settings)
+            self._job_id_holder = job_id_holder
+            self._sf = sf
+
+        def is_configured(self) -> bool:
+            return True
+
+        def fetch(self, request: AcquisitionRequest) -> AcquisitionResult:
+            with self._sf() as s:
+                row = s.get(AcquisitionJob, self._job_id_holder["id"])
+                row.cancel_requested = True
+                s.commit()
+            return AcquisitionResult(provider_id=self.provider_id, url=request.url, status="ok")
+
+    job_id_holder: dict = {}
+    stub = _CancelsMidFlightProvider(settings.scrapling, job_id_holder, db)
+    registry = ProviderRegistry()
+    registry._cache[id(settings)] = {"scrapling": stub}
+    import chanakya.acquisition.job_manager as mod
+
+    monkeypatch.setattr(mod, "registry", registry)
+    jm = JobManager(db, settings, sleep=lambda s: None)
+
+    job = jm.create_job(provider_id="scrapling", url="https://x/")
+    job_id_holder["id"] = job.id
+    jm._run(job.id)
+
+    with db() as s:
+        row = s.get(AcquisitionJob, job.id)
+        assert row.status == "cancelled", "a mid-run cancellation must never be reported as succeeded"
+        assert row.record_count in (0, None), "a cancelled job's would-be result must not be stored"
+
+
 def test_cancel_before_run_prevents_execution(db, monkeypatch):
     jm, stub = _manager_with_stub(db, monkeypatch=monkeypatch)
     job = jm.create_job(provider_id="scrapling", url="https://x/")
