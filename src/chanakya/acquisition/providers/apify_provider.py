@@ -287,6 +287,15 @@ class ApifyProvider(AcquisitionProvider):
                         error=f"{type(exc).__name__} while polling run {run['id']}", retryable=True,
                         diagnostics={"run_id": run.get("id")},
                     )
+                except (KeyError, ValueError) as exc:
+                    # Malformed response shape — a permanent problem with this response, not
+                    # a transient fault (unlike the network error above), even though the run
+                    # id is already known and preserved.
+                    return AcquisitionResult(
+                        provider_id=self.provider_id, url=request.url, status="failed",
+                        error=f"malformed response polling run {run['id']}: {type(exc).__name__}", retryable=False,
+                        diagnostics={"run_id": run.get("id")},
+                    )
                 status = run.get("status")
                 polls += 1
 
@@ -319,6 +328,15 @@ class ApifyProvider(AcquisitionProvider):
                 return AcquisitionResult(
                     provider_id=self.provider_id, url=request.url, status="failed",
                     error=f"{type(exc).__name__} retrieving dataset {dataset_id}", retryable=True,
+                    diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id},
+                )
+            except ValueError as exc:
+                # Not valid JSON (unlike start_run/run_status, this endpoint returns a plain
+                # array with no "data" wrapper, so KeyError doesn't apply here) — a permanent
+                # problem with this response, not a transient fault.
+                return AcquisitionResult(
+                    provider_id=self.provider_id, url=request.url, status="failed",
+                    error=f"malformed response retrieving dataset {dataset_id}: {type(exc).__name__}", retryable=False,
                     diagnostics={"run_id": run.get("id"), "status": status, "dataset_id": dataset_id},
                 )
             records: list = []
