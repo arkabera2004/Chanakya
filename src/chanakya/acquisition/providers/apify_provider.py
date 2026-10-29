@@ -30,25 +30,19 @@ unaddressed: nothing stops a job creator from directing Apify's infrastructure a
 arbitrary external target via ``run_input``; that is a third-party-service-abuse concern,
 not covered by this change.
 
-Job-manager retry and long-running Actors — KNOWN, UNRESOLVED LIMITATION: job_manager.py
-calls this provider's blocking ``fetch()`` exactly like every other provider, with no
-awareness of Apify's async start/poll/cancel model. ``fetch()``'s own polling loop
-(``max_polls``, default 1) only waits within a single call; a still-RUNNING Actor when that
-budget is exhausted is (correctly) classified ``retryable=True`` — it is not a real failure.
-But job_manager's retry does not resume polling the SAME run: it calls ``fetch()`` again
-from scratch, which calls ``start_run()`` again, starting a brand-new (separately billable)
-Actor run. Confirmed directly: two retried attempts against a still-running mock start two
-distinct run ids and spend two runs' worth of compute, never actually completing either.
-This is a real instance of "retrying a non-idempotent operation creates duplicate remote
-work" (job_manager carries no state —  such as the previous attempt's run id — forward
-across a retry, and the registry's cached provider instance is shared across concurrent job
-threads, so it cannot safely hold that state itself either). No safe fix exists within this
-provider alone; it needs job_manager to either pass the prior attempt's run id back into
-the retried request's ``extra``, or to treat ACTOR_EXECUTION-capable providers differently
-in its retry policy — both are job_manager changes, out of scope for a provider-level fix.
-**Until that exists, the only safe way to use this provider for anything that takes more
-than a few seconds is a single call with a generously large ``max_polls``, not relying on
-job_manager's outer retry.**
+Job-manager retry and long-running Actors: job_manager.py's outer retry loop
+(``job_manager._run``) builds one ``AcquisitionRequest`` before its retry loop and calls
+``fetch()`` again on that SAME request object after a retryable failure — so ``fetch()``
+stores the started run's id onto ``request.extra["apify_run_id"]`` after ``start_run()``.
+A still-RUNNING Actor when the local ``max_polls`` budget is exhausted is (correctly)
+classified ``retryable=True``; the next ``fetch()`` call on the same request sees
+``apify_run_id`` already set and resumes polling that run via ``run_status()`` instead of
+calling ``start_run()`` again — avoiding the brand-new (separately billable) Actor run a
+naive retry would otherwise start. This only helps across retries within one job_manager
+``_run()`` call (the same request object); ``job_manager.retry()`` creates an entirely new
+``AcquisitionJob`` row with a fresh ``extra`` dict and therefore still starts a fresh run —
+that path is a deliberate "give up and restart" operation, not an in-flight retry.
+Confirmed by test (``test_retrying_a_still_running_actor_resumes_the_same_run_instead_of_starting_a_new_one``).
 
 Cancellation does NOT reach the remote Actor run — ``job_manager.cancel()`` only ever sets
 a local DB flag the job loop checks before and after its (single, blocking) call to
@@ -191,8 +185,16 @@ class ApifyProvider(AcquisitionProvider):
         owns_client = client is None
         client = client or httpx.Client(base_url=self.settings.base_url, timeout=self.settings.timeout_s)
         try:
+            resume_run_id = request.extra.get("apify_run_id")
             try:
-                run = self.start_run(actor_id, request.extra.get("run_input", {"startUrls": [{"url": request.url}]}), client=client)
+                if resume_run_id:
+                    # job_manager's outer retry calls fetch() again on the SAME request after a
+                    # retryable (still-running) failure — resume polling the run already started
+                    # instead of calling start_run() again, which would bill a second Actor run.
+                    run = self.run_status(resume_run_id, client=client)
+                else:
+                    run = self.start_run(actor_id, request.extra.get("run_input", {"startUrls": [{"url": request.url}]}), client=client)
+                request.extra["apify_run_id"] = run["id"]
             except ProviderConfigError:
                 raise
             except httpx.HTTPStatusError as exc:
