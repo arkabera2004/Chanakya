@@ -13,6 +13,22 @@ Endpoints used (api.apify.com/v2):
   GET  /actor-runs/{run_id}             poll status
   POST /actor-runs/{run_id}/abort       cancel
   GET  /datasets/{dataset_id}/items     paginated results (offset/limit)
+
+Redirect handling / SSRF: unlike Crawlee, Scrapy, Playwright and Crawl4AI, this provider
+never makes the actual page request itself — it only tells Apify's API which Actor to run
+and what input to give it (typically a ``startUrls`` list); the Actor fetches pages (and
+follows any redirects) entirely on Apify's own infrastructure. There is therefore no
+"final URL after a redirect" for Chanakya to observe or validate at the AcquisitionResult
+level the way the other providers' adapters now do — AcquisitionResult.url always reports
+the originally-requested URL, not a per-item or per-redirect destination (individual
+dataset items may carry their own URLs; those are not validated either). ``validate_url``
+is intentionally NOT called here, consistent with the other managed-API providers
+(Firecrawl, Browserless, Zyte): the risk model is different — Chanakya's own network is
+never the one making the outbound request, so this is not an SSRF-against-Chanakya
+exposure in the way a local-fetch provider's unvalidated redirect would be. What IS
+unaddressed: nothing stops a job creator from directing Apify's infrastructure at an
+arbitrary external target via ``run_input``; that is a third-party-service-abuse concern,
+not covered by this change.
 """
 
 from __future__ import annotations
