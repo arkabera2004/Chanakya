@@ -197,3 +197,52 @@ def test_run_crawl_job_skips_tender_record_when_nothing_found(settings):
         job = session.get(WebsiteCrawlJob, "wcj_1")
         assert job.tenders_extracted == 0
         assert session.query(WebsiteTender).filter_by(crawl_job_id="wcj_1").count() == 0
+
+
+def test_run_crawl_job_matches_capabilities_when_knowledge_base_given(settings):
+    from chanakya.pipeline.knowledge import load_knowledge_base
+
+    sf = _setup(settings)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return _ok_html(
+                "<html><body><p>Tender No: NHAI/2026/1</p>"
+                "<p>Supply, installation and commissioning of AI based video analytics "
+                "and surveillance system</p></body></html>",
+            )
+        return _ok_html()
+
+    kb = load_knowledge_base(settings.app.capabilities_file)
+    run_crawl_job(
+        "web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False,
+        knowledge_base=kb, filtering_settings=settings.filtering,
+    )
+
+    with sf() as session:
+        tender = session.query(WebsiteTender).filter_by(crawl_job_id="wcj_1").one()
+        assert isinstance(tender.matches, list)
+        assert len(tender.matches) > 0
+        assert "capability_id" in tender.matches[0]
+        assert "score" in tender.matches[0]
+
+
+def test_run_crawl_job_skips_matching_when_no_knowledge_base_given(settings):
+    sf = _setup(settings)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return _ok_html("<html><body><p>Tender No: NHAI/2026/1</p></body></html>")
+        return _ok_html()
+
+    run_crawl_job("web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False)
+
+    with sf() as session:
+        tender = session.query(WebsiteTender).filter_by(crawl_job_id="wcj_1").one()
+        assert tender.matches == []
