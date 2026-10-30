@@ -24,6 +24,7 @@ from .db import (
     Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender,
     init_db, make_engine, session_factory,
 )
+from .pipeline.knowledge import load_knowledge_base
 from .timeutil import now_utc
 from .webcrawl.runner import run_crawl_job
 
@@ -255,9 +256,10 @@ def start_crawl_job(website_id: str, job_id: str) -> dict[str, Any]:
 
     settings = server.desk_settings()
     documents_dir = Path(settings.app.data_dir) / "website_documents" / website_id / job_id
+    knowledge_base = load_knowledge_base(settings.app.capabilities_file)
     run_crawl_job(
         website_id, job_id, sf, client_factory=_client_factory, resolve_dns=_resolve_dns,
-        documents_dir=documents_dir,
+        documents_dir=documents_dir, knowledge_base=knowledge_base, filtering_settings=settings.filtering,
     )
 
     with sf() as session:
@@ -317,7 +319,7 @@ def list_crawl_job_tenders(website_id: str, job_id: str) -> dict[str, Any]:
         )
         return {"tenders": [
             {
-                "id": t.id, "source_url": t.source_url, "fields": t.fields,
+                "id": t.id, "source_url": t.source_url, "fields": t.fields, "matches": t.matches,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
             }
             for t in rows
