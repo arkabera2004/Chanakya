@@ -764,6 +764,8 @@ def create_app() -> FastAPI:
     app.include_router(profile_router)
     from .desk_acquisition import router as acquisition_router  # /api/acquisition/*
     app.include_router(acquisition_router)
+    from .desk_websites import router as websites_router  # /api/websites*
+    app.include_router(websites_router)
 
     @app.get("/api/brief")
     def brief() -> dict[str, Any]:
