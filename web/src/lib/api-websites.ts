@@ -1,0 +1,73 @@
+import { request } from "@/lib/api";
+
+export type Website = {
+  id: string;
+  name: string;
+  base_url: string;
+  category: string;
+  description: string | null;
+  enabled: boolean;
+  crawl_config: Record<string, unknown>;
+  created_at: string | null;
+  last_crawl_at: string | null;
+  last_crawl_status: string | null;
+};
+
+export type WebsiteCrawlJob = {
+  id: string;
+  website_id: string;
+  status: string;
+  created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  pages_discovered: number;
+  pages_processed: number;
+  pages_failed: number;
+  documents_downloaded: number;
+  tenders_extracted: number;
+  error: string | null;
+  cancel_requested: boolean;
+  pause_requested: boolean;
+};
+
+export type CreateWebsiteInput = {
+  name: string;
+  base_url: string;
+  category: string;
+  description?: string;
+  enabled?: boolean;
+  crawl_config?: Record<string, unknown>;
+};
+
+export type UpdateWebsiteInput = Partial<CreateWebsiteInput>;
+
+export const websitesApi = {
+  list: () => request<{ websites: Website[] }>("/api/websites"),
+  create: (body: CreateWebsiteInput) =>
+    request<Website>("/api/websites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  get: (id: string) => request<Website>(`/api/websites/${id}`),
+  update: (id: string, patch: UpdateWebsiteInput) =>
+    request<Website>(`/api/websites/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+  remove: (id: string) => request<{ deleted: boolean }>(`/api/websites/${id}`, { method: "DELETE" }),
+
+  createCrawlJob: (id: string) =>
+    request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs`, { method: "POST" }),
+  listCrawlJobs: (id: string) =>
+    request<{ crawl_jobs: WebsiteCrawlJob[] }>(`/api/websites/${id}/crawl-jobs`),
+  getCrawlJob: (id: string, jobId: string) =>
+    request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs/${jobId}`),
+  cancelCrawlJob: (id: string, jobId: string) =>
+    request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs/${jobId}/cancel`, { method: "POST" }),
+  pauseCrawlJob: (id: string, jobId: string) =>
+    request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs/${jobId}/pause`, { method: "POST" }),
+  resumeCrawlJob: (id: string, jobId: string) =>
+    request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs/${jobId}/resume`, { method: "POST" }),
+};
