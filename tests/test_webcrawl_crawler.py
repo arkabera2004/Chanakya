@@ -164,3 +164,27 @@ def test_crawl_respects_max_depth():
     urls = {p.url for p in pages}
     assert "https://example.gov.in/a" in urls
     assert "https://example.gov.in/b" not in urls  # depth 2, beyond max_depth=1
+
+
+def test_crawl_stops_early_when_should_stop_returns_true():
+    calls = {"n": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path == "/robots.txt":
+            return httpx.Response(404)
+        if path == "/sitemap.xml":
+            return httpx.Response(404)
+        if path == "/":
+            return httpx.Response(200, text='<a href="/a">a</a><a href="/b">b</a>',
+                                   headers={"content-type": "text/html"})
+        return httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+
+    def should_stop() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 1  # allow the first page (home), stop before the rest
+
+    client = _client(handler)
+    config = CrawlConfig(max_pages=10, max_depth=2, resolve_dns=False)
+    pages = crawl_website(BASE, config, client, should_stop=should_stop)
+    assert len(pages) == 1
