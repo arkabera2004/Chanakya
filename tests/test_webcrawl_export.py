@@ -40,7 +40,7 @@ def test_export_xlsx_preserves_source_url_and_evidence():
     ws = wb.active
     header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
     row = [c.value for c in next(ws.iter_rows(min_row=2, max_row=2))]
-    by_col = dict(zip(header, row))
+    by_col = dict(zip(header, row, strict=True))
     assert by_col["source_url"] == "https://example.gov.in/tenders/1"
     assert by_col["tender_id"] == "NHAI/2026/1"
     assert by_col["tender_id_excerpt"] == "Tender No: NHAI/2026/1"
