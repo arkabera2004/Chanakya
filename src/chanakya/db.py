@@ -125,6 +125,47 @@ class AcquisitionJobEvent(Base):
     data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+class Website(Base):
+    """A user-added site for the Website Intelligence module. Distinct from ``Source``,
+    which models config-file-driven government-portal sources — a ``Website`` is created,
+    edited and removed by a desk user at runtime."""
+
+    __tablename__ = "websites"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    base_url: Mapped[str] = mapped_column(String(2000))
+    category: Mapped[str] = mapped_column(String(40))
+    description: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    crawl_config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    last_crawl_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_crawl_status: Mapped[str | None] = mapped_column(String(20))
+
+
+class WebsiteCrawlJob(Base):
+    """One crawl run of a ``Website``. Tracks discovery/processing counters for the crawl
+    monitor; the actual crawl execution (Phase 2) observes ``cancel_requested``/
+    ``pause_requested`` and updates the counters as it runs."""
+
+    __tablename__ = "website_crawl_jobs"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    website_id: Mapped[str] = mapped_column(ForeignKey("websites.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    # queued|running|paused|succeeded|partial|failed|cancelled
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    pages_discovered: Mapped[int] = mapped_column(Integer, default=0)
+    pages_processed: Mapped[int] = mapped_column(Integer, default=0)
+    pages_failed: Mapped[int] = mapped_column(Integer, default=0)
+    documents_downloaded: Mapped[int] = mapped_column(Integer, default=0)
+    tenders_extracted: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    pause_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class RawOpportunity(Base):
     __tablename__ = "raw_opportunities"
     __table_args__ = (UniqueConstraint("source_id", "source_record_key", "content_hash"),)
