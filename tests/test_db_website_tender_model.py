@@ -24,3 +24,20 @@ def test_website_tender_roundtrip(settings):
         fetched = session.get(WebsiteTender, "wtd_1")
         assert fetched.website_id == "web_1"
         assert fetched.fields["tender_id"]["value"] == "NHAI/1"
+
+
+def test_website_tender_stores_capability_matches(settings):
+    engine = make_engine(settings.app.database_url)
+    init_db(engine)
+    sf = session_factory(engine)
+    with sf() as session:
+        session.add(Website(id="web_2", name="X", base_url="https://x.example", category="other"))
+        session.add(WebsiteCrawlJob(id="wcj_2", website_id="web_2", status="running"))
+        session.commit()
+        session.add(WebsiteTender(
+            id="wtd_2", website_id="web_2", crawl_job_id="wcj_2", source_url="https://x.example/1",
+            fields={}, matches=[{"capability_id": "CAP-AI-01", "score": 0.72}],
+        ))
+        session.commit()
+        fetched = session.get(WebsiteTender, "wtd_2")
+        assert fetched.matches[0]["capability_id"] == "CAP-AI-01"
