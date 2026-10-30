@@ -41,6 +41,7 @@ class DiscoveredPage:
     error: str | None = None
     document_links: list[str] = field(default_factory=list)
     text: str | None = None
+    title: str | None = None
 
 
 def _allowed_domains(base_url: str, config: CrawlConfig) -> list[str]:
@@ -101,6 +102,11 @@ def discover_sitemap_urls(client: httpx.Client, base_url: str) -> list[str]:
                     continue
         return urls
     return top_locs
+
+
+def page_title(html: str) -> str | None:
+    soup = BeautifulSoup(html, "html.parser")
+    return soup.title.string.strip() if soup.title and soup.title.string else None
 
 
 def page_text(html: str) -> str:
@@ -181,6 +187,7 @@ def crawl_website(
 
         if resp.status_code < 400 and "html" in content_type:
             page.text = page_text(resp.text)
+            page.title = page_title(resp.text)
             links = extract_links(resp.text, url)
             page.document_links = [
                 link for link in links
