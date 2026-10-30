@@ -13,9 +13,11 @@ from pathlib import Path
 
 import httpx
 
-from ..config import DocumentSettings
+from ..config import DocumentSettings, FilteringSettings
 from ..db import Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender
+from ..pipeline.knowledge import KnowledgeBase
 from ..timeutil import now_utc
+from .capability_matching import build_tender_record, match_capabilities
 from .crawler import CrawlConfig, DiscoveredPage, crawl_website
 from .documents import download_and_extract
 from .tender_extraction import extract_tender_fields
@@ -47,11 +49,22 @@ def _tender_fields_json(text: str) -> dict | None:
     return {name: {"value": f.value, "excerpt": f.excerpt, "method": f.method} for name, f in fields.items()}
 
 
+def _capability_matches(source_url: str, fields: dict, text: str, kb: KnowledgeBase, filtering: FilteringSettings) -> list[dict]:
+    record = build_tender_record(source_url, fields, text)
+    result = match_capabilities(record, kb, filtering)
+    return [
+        {"capability_id": hit.capability_id, "score": hit.score, "strong": hit.strong, "medium": hit.medium}
+        for hit in result.top
+    ]
+
+
 def run_crawl_job(
     website_id: str, job_id: str, session_factory, *,
     client_factory: Callable[[], httpx.Client] = httpx.Client,
     resolve_dns: bool = True,
     documents_dir: Path | None = None,
+    knowledge_base: KnowledgeBase | None = None,
+    filtering_settings: FilteringSettings | None = None,
 ) -> None:
     """Synchronous: the caller decides whether to run this on a background thread."""
     with session_factory() as session:
@@ -131,9 +144,13 @@ def run_crawl_job(
             tender_fields = _tender_fields_json(page.text)
             if tender_fields is None:
                 continue
+            matches = (
+                _capability_matches(page.url, tender_fields, page.text, knowledge_base, filtering_settings)
+                if knowledge_base is not None and filtering_settings is not None else []
+            )
             session.add(WebsiteTender(
                 id=_new_tender_id(), website_id=website_id, crawl_job_id=job_id,
-                source_url=page.url, fields=tender_fields, created_at=now_utc(),
+                source_url=page.url, fields=tender_fields, matches=matches, created_at=now_utc(),
             ))
             tenders_extracted += 1
         for _source_page_url, doc_url, result in documents:
@@ -142,9 +159,13 @@ def run_crawl_job(
             tender_fields = _tender_fields_json(result.extracted_text)
             if tender_fields is None:
                 continue
+            matches = (
+                _capability_matches(doc_url, tender_fields, result.extracted_text, knowledge_base, filtering_settings)
+                if knowledge_base is not None and filtering_settings is not None else []
+            )
             session.add(WebsiteTender(
                 id=_new_tender_id(), website_id=website_id, crawl_job_id=job_id,
-                source_url=doc_url, fields=tender_fields, created_at=now_utc(),
+                source_url=doc_url, fields=tender_fields, matches=matches, created_at=now_utc(),
             ))
             tenders_extracted += 1
 
