@@ -267,6 +267,40 @@ repeat of the tender-document pattern if needed. Re-crawl/change-detection (brie
 built — a second crawl job for the same website today produces an independent set of rows with
 no diffing against the previous run.
 
+## Website Intelligence — Phase 10/11 (cost report, docs, live verification) — CLOSED
+
+| Date | Commit | Change |
+|---|---|---|
+| 2026-10-30 | `6410ec8` | `docs/COST_ESTIMATION_REPORT.md` — Azure architecture comparison, 3 scenarios, confirmed-price/estimate/assumption/unknown labeling throughout |
+| 2026-10-30 | `bc1e974` | `WEBSITE_INTELLIGENCE_ARCHITECTURE.md`, `GOVERNMENT_CRAWLER_USER_GUIDE.md`, `COMPANY_INTELLIGENCE_GUIDE.md`, `CRAWLER_LIMITATIONS_AND_COMPLIANCE.md` |
+| 2026-10-30 | `6443f39` | Live verification finding: `nhai.gov.in` is a JS-SPA shell with zero static links — the brief's own named example site cannot be link-discovered by this non-browser-rendering crawler |
+| 2026-10-30 | `eda510f` | Live verification finding: `eprocure.gov.in/eprocure/app` — real 8-page crawl, 1 document downloaded, 1 tender extracted, all against real network |
+| 2026-10-30 | `5715972` | ruff lint fix (`B905`, explicit `zip(strict=...)`) |
+
+**Final verification, as actually run** (not claimed without evidence, per brief §18/§19):
+- Full backend suite: **551 passed, 5 skipped (pre-existing, PostgreSQL-gated), 0 failed.**
+- `ruff check src/chanakya tests` — clean.
+- `npx tsc --noEmit` (web/) — clean.
+- `npx next build` (web/) — succeeds, both `/websites` and `/websites/[id]` routes compile.
+- Two real, non-mocked crawls executed against real public sites (not large/uncontrolled —
+  `max_pages` capped at 5–8): `https://example.com/` (sanity check, 1 page, HTTP 200) and
+  `https://nhai.gov.in/` (the brief's own named example — 1 page, HTTP 200, zero further links
+  because its homepage is a JS SPA shell with no static `<a href>` tags, confirmed by direct
+  inspection) and `https://eprocure.gov.in/eprocure/app` (8 pages fetched, all HTTP 200, 1
+  document downloaded, 1 tender extracted with a capability match).
+- Browser-driven UI interaction was **not** performed in this session — `next build`'s
+  static/type verification is the extent of frontend verification done; a real
+  `npm run dev` + browser click-through is a reasonable next step before calling the frontend
+  production-ready, and is explicitly called out as not done here rather than implied.
+
+**What is genuinely production-ready:** the backend pipeline (Phases 1–9) end to end, proven
+against real government-portal traffic in the `eprocure.gov.in` run.
+**What is not:** crawling JS-rendered sites (NHAI itself, per the live finding above) needs a
+browser-rendering fetch added to `chanakya.webcrawl.crawler`; the frontend has not been
+browser-tested; crawl execution is still synchronous-within-request (documented shortcut);
+only a representative tender/company field subset is extracted; re-crawl/change-detection is
+not built; LinkedIn and CAPTCHA-solving remain explicitly out of scope by design.
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
