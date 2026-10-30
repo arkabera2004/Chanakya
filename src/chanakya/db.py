@@ -220,6 +220,21 @@ class WebsiteTender(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
+class WebsiteCompanyProfile(Base):
+    """A company-fact extraction (see ``chanakya.webcrawl.company_extraction``) from one page
+    of a company-website crawl. Same evidence-per-field shape as ``WebsiteTender.fields`` —
+    no capability-matching columns here, since company profiles aren't scored against
+    capabilities the way tenders are."""
+
+    __tablename__ = "website_company_profiles"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    website_id: Mapped[str] = mapped_column(ForeignKey("websites.id"), index=True)
+    crawl_job_id: Mapped[str] = mapped_column(ForeignKey("website_crawl_jobs.id"), index=True)
+    source_url: Mapped[str] = mapped_column(String(2000))
+    fields: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
 class RawOpportunity(Base):
     __tablename__ = "raw_opportunities"
     __table_args__ = (UniqueConstraint("source_id", "source_record_key", "content_hash"),)
