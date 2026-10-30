@@ -210,3 +210,21 @@ def test_crawl_collects_document_links_from_fetched_pages():
     pages = crawl_website(BASE, config, client)
     home = next(p for p in pages if p.url == BASE)
     assert home.document_links == ["https://example.gov.in/notice.pdf", "https://example.gov.in/form.docx"]
+
+
+def test_crawl_captures_plain_text_of_fetched_html_pages():
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return httpx.Response(200, text="<html><body><h1>Tender Notice</h1><p>Deadline: 2026-12-01</p></body></html>",
+                                   headers={"content-type": "text/html"})
+        return httpx.Response(404)
+
+    client = _client(handler)
+    config = CrawlConfig(max_pages=5, max_depth=1, resolve_dns=False)
+    pages = crawl_website(BASE, config, client)
+    home = next(p for p in pages if p.url == BASE)
+    assert "Tender Notice" in home.text
+    assert "Deadline: 2026-12-01" in home.text
