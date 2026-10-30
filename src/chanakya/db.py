@@ -204,6 +204,21 @@ class WebsiteDocument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
+class WebsiteTender(Base):
+    """A structured tender record extracted (deterministically, see
+    ``chanakya.webcrawl.tender_extraction``) from one page or document discovered during a
+    crawl. ``fields`` is ``{field_name: {value, excerpt, method}}`` — evidence travels with
+    every value rather than in a separate table, since a tender's evidence never outlives it."""
+
+    __tablename__ = "website_tenders"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    website_id: Mapped[str] = mapped_column(ForeignKey("websites.id"), index=True)
+    crawl_job_id: Mapped[str] = mapped_column(ForeignKey("website_crawl_jobs.id"), index=True)
+    source_url: Mapped[str] = mapped_column(String(2000))
+    fields: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
 class RawOpportunity(Base):
     __tablename__ = "raw_opportunities"
     __table_args__ = (UniqueConstraint("source_id", "source_record_key", "content_hash"),)
