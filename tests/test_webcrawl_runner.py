@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import httpx
 
-from chanakya.db import Website, WebsiteCrawlJob, WebsitePage, init_db, make_engine, session_factory
+from chanakya.db import Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, init_db, make_engine, session_factory
 from chanakya.webcrawl.runner import run_crawl_job
 
 BASE = "https://example.gov.in/"
@@ -100,3 +100,35 @@ def test_run_crawl_job_stops_when_cancel_requested(settings):
     with sf() as session:
         job = session.get(WebsiteCrawlJob, "wcj_1")
         assert job.status == "cancelled"
+
+
+def test_run_crawl_job_downloads_and_extracts_linked_documents(settings, tmp_path):
+    sf = _setup(settings)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return _ok_html('<a href="/notice.pdf">Notice</a>')
+        if path == "/notice.pdf":
+            # Magic-byte detection (not the extension) drives extraction, so plain text here
+            # still exercises the real extract_document() text path.
+            return httpx.Response(200, content=b"Tender notice body", headers={"content-type": "application/pdf"})
+        return _ok_html()
+
+    run_crawl_job(
+        "web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False,
+        documents_dir=tmp_path,
+    )
+
+    with sf() as session:
+        job = session.get(WebsiteCrawlJob, "wcj_1")
+        assert job.documents_downloaded == 1
+
+        docs = session.query(WebsiteDocument).filter_by(crawl_job_id="wcj_1").all()
+        assert len(docs) == 1
+        assert docs[0].document_url == "https://example.gov.in/notice.pdf"
+        assert docs[0].source_page_url == BASE
+        assert docs[0].status == "extracted"
+        assert "Tender notice body" in docs[0].extracted_text
