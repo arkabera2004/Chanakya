@@ -94,7 +94,7 @@ def run_crawl_job(
                 id=_new_page_id(), website_id=website_id, crawl_job_id=job_id,
                 url=page.url, depth=page.depth, status=page.status,
                 http_status=page.http_status, content_type=page.content_type, error=page.error,
-                discovered_at=now_utc(),
+                extracted_text=page.text, discovered_at=now_utc(),
             ))
             if page.status in _FAILED_STATUSES:
                 failed += 1
