@@ -184,6 +184,25 @@ class WebsitePage(Base):
     discovered_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
+class WebsiteDocument(Base):
+    """A PDF/DOC/DOCX discovered and downloaded during a ``WebsiteCrawlJob`` run, with its
+    extracted text (via ``chanakya.documents.extract_document`` — no separate parser here)."""
+
+    __tablename__ = "website_documents"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    website_id: Mapped[str] = mapped_column(ForeignKey("websites.id"), index=True)
+    crawl_job_id: Mapped[str] = mapped_column(ForeignKey("website_crawl_jobs.id"), index=True)
+    source_page_url: Mapped[str] = mapped_column(String(2000))
+    document_url: Mapped[str] = mapped_column(String(2000))
+    local_path: Mapped[str | None] = mapped_column(String(1000))
+    sha256: Mapped[str | None] = mapped_column(String(64))
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(20), default="downloaded")  # downloaded|extracted|failed
+    extraction_error: Mapped[str | None] = mapped_column(Text)
+    extracted_text: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
 class RawOpportunity(Base):
     __tablename__ = "raw_opportunities"
     __table_args__ = (UniqueConstraint("source_id", "source_record_key", "content_hash"),)
