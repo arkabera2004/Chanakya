@@ -201,6 +201,26 @@ findings, etc. that a website-crawled tender doesn't reliably have yet) — this
 capability relevance only, consistent with the design doc's explicit instruction not to present
 a relevance score as proof of eligibility.
 
+## Website Intelligence — Phase 6/7 (frontend: website management + crawl monitoring)
+
+New nav entry "Website Intelligence" (`/websites`), following the existing `AppShell`/
+`components/ui` conventions (`Panel`, `Button`, `StatusChip`, `EmptyState`) — no new design
+system.
+
+| Date | Commit | Change | Files | Verification |
+|---|---|---|---|---|
+| 2026-10-30 | `8d643fe` | Websites list page (add form, enable/disable/last-crawl status) + detail page (crawl job list/start/pause/resume/cancel, tabbed pages/documents/tenders view with source links and evidence excerpts), nav entry | `web/src/app/websites/`, `web/src/components/layout/shell.tsx` | `tsc --noEmit` clean; `next build` succeeds (both routes compile) |
+
+This covers the brief's crawl-monitoring and source-verification requirements for the pieces
+built in Phases 1–5: live job status, pages/documents/tenders tabs, direct links back to the
+original source URL on every page, document and tender card, and evidence excerpts shown next
+to each extracted field.
+
+Not yet done: CSV/XLSX export (Phase 8), and this frontend has not yet been exercised against
+a running dev server with real browser interaction — only `next build`'s static/type
+verification. Full browser-driven live verification is Phase 11's job, against the brief's own
+phase ordering.
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
