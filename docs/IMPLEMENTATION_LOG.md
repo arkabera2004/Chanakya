@@ -135,6 +135,43 @@ Not yet done (Phase 4+): extracted text (from pages and documents) is stored, bu
 tender fields (title, tender ID, deadline, EMD, etc.) are parsed out of it yet, and nothing is
 matched against the Wayam capability book.
 
+## Website Intelligence — Phase 4 (structured tender extraction with evidence)
+
+Deterministic, regex/label-anchored field extraction — no LLM. Reuses
+`connectors.base.infer_state`/`infer_opportunity_type`/`parse_inr_amount` rather than
+reimplementing them. Every extracted value carries the exact source line it came from
+(`excerpt`); a field with no match is `None`, never a fabricated placeholder.
+
+| Date | Commit | Change | Files | Tests |
+|---|---|---|---|---|
+| 2026-10-30 | `f3a49af` | RED: reproduce missing page-text capture | `tests/test_webcrawl_crawler.py` | 1 new, failing (expected) |
+| 2026-10-30 | `e11920a` | Crawler captures plain text of fetched HTML pages | `webcrawl/crawler.py` | 1 new passing |
+| 2026-10-30 | `1e5c54a` | RED: reproduce missing `WebsitePage.extracted_text` column | `tests/test_db_website_page_model.py` | 1 new, failing (expected) |
+| 2026-10-30 | `0217948` | Add `extracted_text` column + migration | `db.py`, `migrations/versions/5d074bbf68c4_*.py` | 1 new passing |
+| 2026-10-30 | `8270907` | RED: reproduce missing page-text persistence | `tests/test_webcrawl_runner.py` | 1 new, failing (expected) |
+| 2026-10-30 | `0ddcdae` | Runner persists page text to `WebsitePage.extracted_text` | `webcrawl/runner.py` | 1 new passing |
+| 2026-10-30 | `7d08741` | RED: reproduce missing tender-field extraction module | `tests/test_webcrawl_tender_extraction.py` | 3 new, failing (expected) |
+| 2026-10-30 | `851a674` | `extract_tender_fields`: label-anchored regex extraction with excerpts | `webcrawl/tender_extraction.py` | 3 new passing |
+| 2026-10-30 | `6ea69e4` | RED: reproduce missing `WebsiteTender` model | `tests/test_db_website_tender_model.py` | 1 new, failing (expected) |
+| 2026-10-30 | `f9feee5` | `WebsiteTender` model + migration (fields as JSON, evidence travels with each value) | `db.py`, `migrations/versions/9221c47e6302_*.py` | 1 new passing; migration-equivalence green |
+| 2026-10-30 | `f104d20` | RED: reproduce missing extraction wiring in the runner | `tests/test_webcrawl_runner.py` | 2 new, failing (expected) |
+| 2026-10-30 | `9fadafe` | Runner extracts tender fields from pages and documents, skips empty results | `webcrawl/runner.py` | 2 new passing |
+| 2026-10-30 | `4fbcf6b` | RED: reproduce missing tenders-listing endpoint | `tests/test_desk_websites_api.py` | 1 new, failing (expected) |
+| 2026-10-30 | `2e4770f` | `GET .../crawl-jobs/{id}/tenders` endpoint | `desk_websites.py` | 1 new passing; full suite green |
+| 2026-10-30 | `a1c729b` | Frontend client: `listCrawlJobTenders` | `web/src/lib/api-websites.ts` | `tsc --noEmit` clean |
+
+End-to-end at this point: a crawl discovers a page, extracts its text, finds a tender ID/state/
+deadline/etc. with an exact excerpt, and the API serves it with a direct link back to
+`source_url` — the chain the brief's "click the original source link and verify" requirement
+needs, for the subset of fields covered.
+
+Known limitation: only the fields listed in `tender_extraction._LABEL_PATTERNS` plus
+state/opportunity_type are covered (tender_id, organisation, publication/submission/pre-bid/
+opening dates, estimated_value, EMD, tender_fee, state, opportunity_type) — not the full field
+list in the brief (scope of work, eligibility, required documents, contact info, etc.). Those
+need either more label patterns or an LLM-assisted pass with the same evidence-grounding
+discipline (`pipeline.analyze`'s `_evidence_in` check is the existing precedent for that).
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
