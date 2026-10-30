@@ -132,3 +132,21 @@ def test_run_crawl_job_downloads_and_extracts_linked_documents(settings, tmp_pat
         assert docs[0].source_page_url == BASE
         assert docs[0].status == "extracted"
         assert "Tender notice body" in docs[0].extracted_text
+
+
+def test_run_crawl_job_persists_page_extracted_text(settings):
+    sf = _setup(settings)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return _ok_html("<html><body><h1>Tender Notice</h1></body></html>")
+        return _ok_html()
+
+    run_crawl_job("web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False)
+
+    with sf() as session:
+        home = session.query(WebsitePage).filter_by(crawl_job_id="wcj_1", url=BASE).one()
+        assert "Tender Notice" in home.extracted_text
