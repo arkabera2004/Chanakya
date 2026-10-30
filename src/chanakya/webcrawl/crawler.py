@@ -19,6 +19,7 @@ from ..security import SecurityError, validate_url
 USER_AGENT = "ChanakyaWebsiteIntelligenceBot/1.0 (+https://wayam.ai)"
 _SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 _SKIPPED_HREF_PREFIXES = ("mailto:", "tel:", "javascript:", "#")
+DOCUMENT_EXTENSIONS = (".pdf", ".doc", ".docx")
 
 
 @dataclass
@@ -37,11 +38,20 @@ class DiscoveredPage:
     http_status: int | None = None
     content_type: str | None = None
     error: str | None = None
+    document_links: list[str] = field(default_factory=list)
 
 
 def _allowed_domains(base_url: str, config: CrawlConfig) -> list[str]:
     host = urlsplit(base_url).hostname or ""
     return [host, *config.extra_allowed_domains]
+
+
+def _in_scope(url: str, allowed: list[str], config: CrawlConfig) -> bool:
+    try:
+        validate_url(url, allowed, allow_http=True, resolve_dns=config.resolve_dns)
+        return True
+    except SecurityError:
+        return False
 
 
 def _get(client: httpx.Client, url: str) -> httpx.Response | None:
@@ -151,14 +161,22 @@ def crawl_website(
             continue
 
         content_type = resp.headers.get("content-type", "")
-        pages.append(DiscoveredPage(
+        page = DiscoveredPage(
             url=url, depth=depth, status="fetched" if resp.status_code < 400 else "failed",
             http_status=resp.status_code, content_type=content_type,
-        ))
+        )
+        pages.append(page)
 
-        if depth < config.max_depth and resp.status_code < 400 and "html" in content_type:
-            for link in extract_links(resp.text, url):
-                if link not in seen:
-                    queue.append((link, depth + 1))
+        if resp.status_code < 400 and "html" in content_type:
+            links = extract_links(resp.text, url)
+            page.document_links = [
+                link for link in links
+                if urlsplit(link).path.lower().endswith(DOCUMENT_EXTENSIONS)
+                and _in_scope(link, allowed, config)
+            ]
+            if depth < config.max_depth:
+                for link in links:
+                    if link not in seen and not urlsplit(link).path.lower().endswith(DOCUMENT_EXTENSIONS):
+                        queue.append((link, depth + 1))
 
     return pages
