@@ -6,7 +6,10 @@ from __future__ import annotations
 
 import httpx
 
-from chanakya.db import Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, init_db, make_engine, session_factory
+from chanakya.db import (
+    Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender,
+    init_db, make_engine, session_factory,
+)
 from chanakya.webcrawl.runner import run_crawl_job
 
 BASE = "https://example.gov.in/"
@@ -150,3 +153,47 @@ def test_run_crawl_job_persists_page_extracted_text(settings):
     with sf() as session:
         home = session.query(WebsitePage).filter_by(crawl_job_id="wcj_1", url=BASE).one()
         assert "Tender Notice" in home.extracted_text
+
+
+def test_run_crawl_job_extracts_tender_fields_from_page_text(settings):
+    sf = _setup(settings)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return _ok_html("<html><body><p>Tender No: NHAI/2026/1</p>"
+                             "<p>State: Tamil Nadu</p></body></html>")
+        return _ok_html()
+
+    run_crawl_job("web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False)
+
+    with sf() as session:
+        job = session.get(WebsiteCrawlJob, "wcj_1")
+        assert job.tenders_extracted == 1
+
+        tenders = session.query(WebsiteTender).filter_by(crawl_job_id="wcj_1").all()
+        assert len(tenders) == 1
+        assert tenders[0].source_url == BASE
+        assert tenders[0].fields["tender_id"]["value"] == "NHAI/2026/1"
+        assert tenders[0].fields["state"]["value"] == "Tamil Nadu"
+
+
+def test_run_crawl_job_skips_tender_record_when_nothing_found(settings):
+    sf = _setup(settings)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return _ok_html("<html><body>Nothing tender-related here.</body></html>")
+        return _ok_html()
+
+    run_crawl_job("web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False)
+
+    with sf() as session:
+        job = session.get(WebsiteCrawlJob, "wcj_1")
+        assert job.tenders_extracted == 0
+        assert session.query(WebsiteTender).filter_by(crawl_job_id="wcj_1").count() == 0
