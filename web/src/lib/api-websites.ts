@@ -123,4 +123,6 @@ export const websitesApi = {
     request<{ documents: WebsiteDocument[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/documents`),
   listCrawlJobTenders: (id: string, jobId: string) =>
     request<{ tenders: WebsiteTender[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/tenders`),
+  exportTendersUrl: (id: string, jobId: string, format: "csv" | "xlsx") =>
+    `/api/websites/${id}/crawl-jobs/${jobId}/tenders/export?format=${format}`,
 };

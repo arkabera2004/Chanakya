@@ -194,6 +194,16 @@ export default function WebsiteDetailPage() {
                     </EmptyState>
                   ) : (
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {tenders && tenders.length > 0 && selectedJobId ? (
+                        <div className="col-span-full flex justify-end gap-2">
+                          <a href={websitesApi.exportTendersUrl(id, selectedJobId, "csv")} className="text-body-sm text-tertiary hover:underline">
+                            Export CSV
+                          </a>
+                          <a href={websitesApi.exportTendersUrl(id, selectedJobId, "xlsx")} className="text-body-sm text-tertiary hover:underline">
+                            Export XLSX
+                          </a>
+                        </div>
+                      ) : null}
                       {(tenders ?? []).map((t) => <TenderCard key={t.id} tender={t} />)}
                     </div>
                   )
