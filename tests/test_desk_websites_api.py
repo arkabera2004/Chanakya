@@ -321,3 +321,64 @@ def test_start_crawl_includes_capability_matches_on_tenders(desk, monkeypatch):
         assert len(tenders) == 1
         assert isinstance(tenders[0]["matches"], list)
         assert len(tenders[0]["matches"]) > 0
+
+
+def test_export_tenders_csv(desk, monkeypatch):
+    import httpx
+
+    from chanakya import desk_websites
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        return httpx.Response(200, text="<html><body><p>Tender No: NHAI/2026/1</p></body></html>",
+                               headers={"content-type": "text/html"})
+
+    monkeypatch.setattr(desk_websites, "_client_factory",
+                         lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(desk_websites, "_resolve_dns", False)
+
+    with TestClient(create_app()) as client:
+        wid = _create_website(client, base_url="https://example.gov.in/")["id"]
+        job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
+        client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/start")
+
+        r = client.get(f"/api/websites/{wid}/crawl-jobs/{job_id}/tenders/export?format=csv")
+        assert r.status_code == 200
+        assert "text/csv" in r.headers["content-type"]
+        assert "https://example.gov.in/" in r.text
+        assert "NHAI/2026/1" in r.text
+
+
+def test_export_tenders_xlsx(desk, monkeypatch):
+    import httpx
+
+    from chanakya import desk_websites
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        return httpx.Response(200, text="<html><body><p>Tender No: NHAI/2026/1</p></body></html>",
+                               headers={"content-type": "text/html"})
+
+    monkeypatch.setattr(desk_websites, "_client_factory",
+                         lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(desk_websites, "_resolve_dns", False)
+
+    with TestClient(create_app()) as client:
+        wid = _create_website(client, base_url="https://example.gov.in/")["id"]
+        job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
+        client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/start")
+
+        r = client.get(f"/api/websites/{wid}/crawl-jobs/{job_id}/tenders/export?format=xlsx")
+        assert r.status_code == 200
+        assert "spreadsheet" in r.headers["content-type"]
+        assert len(r.content) > 0
+
+
+def test_export_tenders_rejects_unknown_format(desk):
+    with TestClient(create_app()) as client:
+        wid = _create_website(client)["id"]
+        job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
+        r = client.get(f"/api/websites/{wid}/crawl-jobs/{job_id}/tenders/export?format=pdf")
+        assert r.status_code == 400
