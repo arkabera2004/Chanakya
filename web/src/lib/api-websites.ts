@@ -36,10 +36,18 @@ export type ExtractedField = {
   method: string;
 };
 
+export type CapabilityMatch = {
+  capability_id: string;
+  score: number;
+  strong: string[];
+  medium: string[];
+};
+
 export type WebsiteTender = {
   id: string;
   source_url: string;
   fields: Record<string, ExtractedField>;
+  matches: CapabilityMatch[];
   created_at: string | null;
 };
 
