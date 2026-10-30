@@ -74,6 +74,41 @@ re-running against a clean working tree). Resolved by deleting Docker Desktop's 
 disk image (`~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw`, with explicit
 user confirmation) — not a code or test defect.
 
+## Website Intelligence — Phase 2 (generic URL-driven crawler)
+
+A new `chanakya.webcrawl` package, separate from `connectors/` (government-portal-specific)
+and `acquisition/` (provider-backed): crawls an arbitrary user-added website within an
+explicit same-origin scope. Reuses `security.validate_url` for SSRF protection rather than
+reimplementing it.
+
+| Date | Commit | Change | Files | Tests |
+|---|---|---|---|---|
+| 2026-10-30 | `66f5d62` | RED: reproduce missing webcrawl module | `tests/test_webcrawl_crawler.py` | 8 new, failing (expected) |
+| 2026-10-30 | `61bfdf9` | Crawler core: robots.txt, sitemap discovery, same-origin link discovery, page/depth limits | `webcrawl/crawler.py` | 8 new passing |
+| 2026-10-30 | `1998b72` | RED: reproduce missing cancel hook | `tests/test_webcrawl_crawler.py` | 1 new, failing (expected) |
+| 2026-10-30 | `16fe1b8` | `should_stop` hook so a crawl can be cancelled/paused mid-run | `webcrawl/crawler.py` | 1 new passing |
+| 2026-10-30 | `fd254ed` | RED: reproduce missing `WebsitePage` model | `tests/test_db_website_page_model.py` | 1 new, failing (expected) |
+| 2026-10-30 | `d5f5c1b` | `WebsitePage` model + migration (one row per discovered URL per crawl job) | `db.py`, `migrations/versions/8b0a76f20354_*.py` | 1 new passing; migration-equivalence green |
+| 2026-10-30 | `519ce2d` | RED: reproduce missing crawl job runner | `tests/test_webcrawl_runner.py` | 3 new, failing (expected) |
+| 2026-10-30 | `6224d3c` | Runner: executes a crawl job, persists pages, updates job counters/status | `webcrawl/runner.py` | 3 new passing |
+| 2026-10-30 | `84bc892` | RED: reproduce missing start/pages endpoints | `tests/test_desk_websites_api.py` | 2 new, failing (expected) |
+| 2026-10-30 | `7214fc6` | `/start` (runs the crawl) and `/pages` (discovered-page list) endpoints | `desk_websites.py` | 2 new passing; full suite green |
+| 2026-10-30 | `30cf52d` | Frontend client: `startCrawlJob`, `listCrawlJobPages` | `web/src/lib/api-websites.ts` | `tsc --noEmit` clean |
+
+End-to-end at this point: add a website → create a crawl job → `/start` → a real (mocked-in-test)
+crawl runs respecting robots.txt/sitemap/same-origin scope/page+depth limits → discovered pages
+persisted and queryable, with the website's `last_crawl_status` updated.
+
+Known shortcut (documented in `desk_websites.start_crawl_job`'s docstring): `/start` runs the
+crawl synchronously within the request. Fine for the bounded page counts this phase targets;
+upgrading to a background executor (mirroring `acquisition/job_manager.py`'s thread pool) is
+deferred until crawl sizes actually need it.
+
+Not yet done (Phase 3+): the crawler discovers and fetches HTML pages but does not yet persist
+extracted text, download linked PDF/DOC/DOCX documents, or extract structured tender fields.
+`chanakya.documents.extract_document` already exists and is the intended reuse target for that
+work — not a new parser.
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
