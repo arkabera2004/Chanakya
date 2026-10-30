@@ -181,6 +181,7 @@ class WebsitePage(Base):
     http_status: Mapped[int | None] = mapped_column(Integer)
     content_type: Mapped[str | None] = mapped_column(String(100))
     error: Mapped[str | None] = mapped_column(Text)
+    extracted_text: Mapped[str | None] = mapped_column(Text)
     discovered_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
