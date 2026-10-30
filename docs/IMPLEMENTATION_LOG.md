@@ -172,6 +172,35 @@ list in the brief (scope of work, eligibility, required documents, contact info,
 need either more label patterns or an LLM-assisted pass with the same evidence-grounding
 discipline (`pipeline.analyze`'s `_evidence_in` check is the existing precedent for that).
 
+## Website Intelligence — Phase 5 (Wayam capability matching)
+
+Reuses `pipeline.classify.RuleClassifier` directly — no second matching engine, per the design
+doc's explicit requirement. A `WebsiteTender`'s extracted fields/text are mapped into a minimal
+`TenderRecord` and run through the same rule-based classifier every other source uses.
+
+| Date | Commit | Change | Files | Tests |
+|---|---|---|---|---|
+| 2026-10-30 | `c0160e6` | RED: reproduce missing capability-matching wiring | `tests/test_webcrawl_capability_matching.py` | 2 new, failing (expected) |
+| 2026-10-30 | `d22972b` | `build_tender_record`/`match_capabilities`: maps extracted fields into a `TenderRecord`, classifies via the real `RuleClassifier` | `webcrawl/capability_matching.py` | 2 new passing |
+| 2026-10-30 | `872a6a4` | RED: reproduce missing `WebsiteTender.matches` column | `tests/test_db_website_tender_model.py` | 1 new, failing (expected) |
+| 2026-10-30 | `c3bf153` | `matches` column + migration | `db.py`, `migrations/versions/9edb78621afd_*.py` | 1 new passing; migration-equivalence green |
+| 2026-10-30 | `f78e359` | RED: reproduce missing matching wiring in the runner | `tests/test_webcrawl_runner.py` | 2 new, failing (expected) |
+| 2026-10-30 | `5aa4ddf` | Runner computes capability matches when a knowledge base is supplied (optional, backward compatible) | `webcrawl/runner.py` | 2 new passing |
+| 2026-10-30 | `114aeee` | RED: reproduce missing matches on `/start`+`/tenders` | `tests/test_desk_websites_api.py` | 1 new, failing (expected) |
+| 2026-10-30 | `22458c4` | `/start` loads the real Wayam capability book; `/tenders` serves `matches` | `desk_websites.py` | 1 new passing; full suite green |
+| 2026-10-30 | `b69b695` | Frontend type: `CapabilityMatch` | `web/src/lib/api-websites.ts` | `tsc --noEmit` clean |
+
+End-to-end at this point: a crawled tender's extracted fields feed directly into the same
+rule-based capability scorer used everywhere else in Chanakya, and the top-3 capability hits
+(id, score, matched strong/medium keyword phrases) ride along with the tender record through
+the API.
+
+Known limitation: `top` capability hits are stored as a plain list (id/score/keyword terms),
+not the full `pipeline.scoring.Scorer` composite score (which needs a closing date, eligibility
+findings, etc. that a website-crawled tender doesn't reliably have yet) — this is rule-based
+capability relevance only, consistent with the design doc's explicit instruction not to present
+a relevance score as proof of eligibility.
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
