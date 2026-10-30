@@ -41,6 +41,17 @@ export type CreateWebsiteInput = {
 
 export type UpdateWebsiteInput = Partial<CreateWebsiteInput>;
 
+export type WebsitePage = {
+  id: string;
+  url: string;
+  depth: number;
+  status: string;
+  http_status: number | null;
+  content_type: string | null;
+  error: string | null;
+  discovered_at: string | null;
+};
+
 export const websitesApi = {
   list: () => request<{ websites: Website[] }>("/api/websites"),
   create: (body: CreateWebsiteInput) =>
@@ -70,4 +81,8 @@ export const websitesApi = {
     request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs/${jobId}/pause`, { method: "POST" }),
   resumeCrawlJob: (id: string, jobId: string) =>
     request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs/${jobId}/resume`, { method: "POST" }),
+  startCrawlJob: (id: string, jobId: string) =>
+    request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs/${jobId}/start`, { method: "POST" }),
+  listCrawlJobPages: (id: string, jobId: string) =>
+    request<{ pages: WebsitePage[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/pages`),
 };
