@@ -20,6 +20,7 @@ USER_AGENT = "ChanakyaWebsiteIntelligenceBot/1.0 (+https://wayam.ai)"
 _SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 _SKIPPED_HREF_PREFIXES = ("mailto:", "tel:", "javascript:", "#")
 DOCUMENT_EXTENSIONS = (".pdf", ".doc", ".docx")
+MAX_PAGE_TEXT_CHARS = 50_000
 
 
 @dataclass
@@ -39,6 +40,7 @@ class DiscoveredPage:
     content_type: str | None = None
     error: str | None = None
     document_links: list[str] = field(default_factory=list)
+    text: str | None = None
 
 
 def _allowed_domains(base_url: str, config: CrawlConfig) -> list[str]:
@@ -99,6 +101,16 @@ def discover_sitemap_urls(client: httpx.Client, base_url: str) -> list[str]:
                     continue
         return urls
     return top_locs
+
+
+def page_text(html: str) -> str:
+    """Plain text of an HTML page, for tender-field extraction — ``extract_document`` (which
+    already strips script/style/nav/header/footer for standalone documents) is not reused here
+    since a full page's chrome differs from a document's, but the stripped-tag set matches it."""
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "nav", "header", "footer"]):
+        tag.decompose()
+    return soup.get_text("\n", strip=True)[:MAX_PAGE_TEXT_CHARS]
 
 
 def extract_links(html: str, page_url: str) -> list[str]:
@@ -168,6 +180,7 @@ def crawl_website(
         pages.append(page)
 
         if resp.status_code < 400 and "html" in content_type:
+            page.text = page_text(resp.text)
             links = extract_links(resp.text, url)
             page.document_links = [
                 link for link in links
