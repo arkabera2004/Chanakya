@@ -292,3 +292,32 @@ def test_start_crawl_extracts_tenders_and_lists_them(desk, monkeypatch):
         assert len(tenders) == 1
         assert tenders[0]["source_url"] == "https://example.gov.in/"
         assert tenders[0]["fields"]["tender_id"]["value"] == "NHAI/2026/1"
+
+
+def test_start_crawl_includes_capability_matches_on_tenders(desk, monkeypatch):
+    import httpx
+
+    from chanakya import desk_websites
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        return httpx.Response(200, text=(
+            "<html><body><p>Tender No: NHAI/2026/1</p>"
+            "<p>Supply, installation and commissioning of AI based video analytics "
+            "and surveillance system</p></body></html>"
+        ), headers={"content-type": "text/html"})
+
+    monkeypatch.setattr(desk_websites, "_client_factory",
+                         lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(desk_websites, "_resolve_dns", False)
+
+    with TestClient(create_app()) as client:
+        wid = _create_website(client, base_url="https://example.gov.in/")["id"]
+        job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
+        client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/start")
+
+        tenders = client.get(f"/api/websites/{wid}/crawl-jobs/{job_id}/tenders").json()["tenders"]
+        assert len(tenders) == 1
+        assert isinstance(tenders[0]["matches"], list)
+        assert len(tenders[0]["matches"]) > 0
