@@ -166,6 +166,24 @@ class WebsiteCrawlJob(Base):
     pause_requested: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class WebsitePage(Base):
+    """One URL discovered/fetched during a ``WebsiteCrawlJob`` run (see
+    ``chanakya.webcrawl.crawler``). Written once per URL per crawl job — never updated in
+    place, so re-crawling a website produces a fresh set of rows for its own job."""
+
+    __tablename__ = "website_pages"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    website_id: Mapped[str] = mapped_column(ForeignKey("websites.id"), index=True)
+    crawl_job_id: Mapped[str] = mapped_column(ForeignKey("website_crawl_jobs.id"), index=True)
+    url: Mapped[str] = mapped_column(String(2000))
+    depth: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20))  # fetched|failed|skipped_robots|skipped_offsite
+    http_status: Mapped[int | None] = mapped_column(Integer)
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    error: Mapped[str | None] = mapped_column(Text)
+    discovered_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
 class RawOpportunity(Base):
     __tablename__ = "raw_opportunities"
     __table_args__ = (UniqueConstraint("source_id", "source_record_key", "content_hash"),)
