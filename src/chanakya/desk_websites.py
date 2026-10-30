@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from . import server
 from .db import (
-    Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender,
+    Website, WebsiteCompanyProfile, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender,
     init_db, make_engine, session_factory,
 )
 from .pipeline.knowledge import load_knowledge_base
@@ -325,6 +325,26 @@ def list_crawl_job_tenders(website_id: str, job_id: str) -> dict[str, Any]:
                 "created_at": t.created_at.isoformat() if t.created_at else None,
             }
             for t in rows
+        ]}
+
+
+@router.get("/api/websites/{website_id}/crawl-jobs/{job_id}/company-profile")
+def get_crawl_job_company_profile(website_id: str, job_id: str) -> dict[str, Any]:
+    sf = _session_factory()
+    with sf() as session:
+        _get_crawl_job(session, website_id, job_id)
+        rows = (
+            session.query(WebsiteCompanyProfile)
+            .filter_by(crawl_job_id=job_id)
+            .order_by(WebsiteCompanyProfile.created_at)
+            .all()
+        )
+        return {"profiles": [
+            {
+                "id": p.id, "source_url": p.source_url, "fields": p.fields,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in rows
         ]}
 
 
