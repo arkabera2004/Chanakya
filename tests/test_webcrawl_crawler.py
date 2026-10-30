@@ -228,3 +228,20 @@ def test_crawl_captures_plain_text_of_fetched_html_pages():
     home = next(p for p in pages if p.url == BASE)
     assert "Tender Notice" in home.text
     assert "Deadline: 2026-12-01" in home.text
+
+
+def test_crawl_captures_page_title():
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return httpx.Response(200, text="<html><head><title>Acme Robotics</title></head><body>Hi</body></html>",
+                                   headers={"content-type": "text/html"})
+        return httpx.Response(404)
+
+    client = _client(handler)
+    config = CrawlConfig(max_pages=5, max_depth=1, resolve_dns=False)
+    pages = crawl_website(BASE, config, client)
+    home = next(p for p in pages if p.url == BASE)
+    assert home.title == "Acme Robotics"
