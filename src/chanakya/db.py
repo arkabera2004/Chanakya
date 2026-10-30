@@ -216,6 +216,7 @@ class WebsiteTender(Base):
     crawl_job_id: Mapped[str] = mapped_column(ForeignKey("website_crawl_jobs.id"), index=True)
     source_url: Mapped[str] = mapped_column(String(2000))
     fields: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    matches: Mapped[list[Any]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
