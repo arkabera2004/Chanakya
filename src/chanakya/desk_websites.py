@@ -19,7 +19,7 @@ from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel
 
 from . import server
-from .db import Website, WebsiteCrawlJob, WebsitePage, init_db, make_engine, session_factory
+from .db import Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, init_db, make_engine, session_factory
 from .timeutil import now_utc
 from .webcrawl.runner import run_crawl_job
 
@@ -269,6 +269,29 @@ def list_crawl_job_pages(website_id: str, job_id: str) -> dict[str, Any]:
                 "discovered_at": p.discovered_at.isoformat() if p.discovered_at else None,
             }
             for p in rows
+        ]}
+
+
+@router.get("/api/websites/{website_id}/crawl-jobs/{job_id}/documents")
+def list_crawl_job_documents(website_id: str, job_id: str) -> dict[str, Any]:
+    sf = _session_factory()
+    with sf() as session:
+        _get_crawl_job(session, website_id, job_id)
+        rows = (
+            session.query(WebsiteDocument)
+            .filter_by(crawl_job_id=job_id)
+            .order_by(WebsiteDocument.created_at)
+            .all()
+        )
+        return {"documents": [
+            {
+                "id": d.id, "source_page_url": d.source_page_url, "document_url": d.document_url,
+                "local_path": d.local_path, "sha256": d.sha256, "content_type": d.content_type,
+                "status": d.status, "extraction_error": d.extraction_error,
+                "extracted_text": d.extracted_text,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in rows
         ]}
 
 
