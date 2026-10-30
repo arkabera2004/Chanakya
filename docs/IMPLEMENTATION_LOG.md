@@ -221,6 +221,25 @@ a running dev server with real browser interaction — only `next build`'s stati
 verification. Full browser-driven live verification is Phase 11's job, against the brief's own
 phase ordering.
 
+## Website Intelligence — Phase 8 (export)
+
+| Date | Commit | Change | Files | Tests |
+|---|---|---|---|---|
+| 2026-10-30 | `8e3faf4` | RED: reproduce missing tender export module | `tests/test_webcrawl_export.py` | 3 new, failing (expected) |
+| 2026-10-30 | `2ed8089` | `export_csv`/`export_xlsx`: every row keeps source URL + per-field excerpt | `webcrawl/export.py` | 3 new passing |
+| 2026-10-30 | `bc954eb` | RED: reproduce missing export endpoint | `tests/test_desk_websites_api.py` | 3 new, failing (expected) |
+| 2026-10-30 | `c0a938c` | `GET .../tenders/export?format=csv\|xlsx` endpoint | `desk_websites.py` | 3 new passing; full suite green |
+| 2026-10-30 | `0beebb0` | Export links in the tenders tab | `web/src/lib/api-websites.ts`, `web/src/app/websites/[id]/page.tsx` | `tsc --noEmit` clean |
+
+This closes the government-crawler core (Phases 1–8) from the design doc: add a website, crawl
+it, discover/download/extract documents, extract tender fields with evidence, match against
+Wayam capabilities, inspect everything in the frontend, and export it — all on real (though
+test-mocked) HTTP, with 0 fabricated data at any stage.
+
+Not yet started: Company Website Intelligence (Phase 9), Azure architecture + cost report
+(Phase 10), remaining docs and a real (non-mocked) live crawl verification against a couple of
+actual public sites (Phase 11).
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
