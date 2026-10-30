@@ -36,6 +36,13 @@ export type ExtractedField = {
   method: string;
 };
 
+export type CompanyProfilePage = {
+  id: string;
+  source_url: string;
+  fields: Record<string, ExtractedField & { value: string | string[] | null }>;
+  created_at: string | null;
+};
+
 export type CapabilityMatch = {
   capability_id: string;
   score: number;
@@ -125,4 +132,6 @@ export const websitesApi = {
     request<{ tenders: WebsiteTender[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/tenders`),
   exportTendersUrl: (id: string, jobId: string, format: "csv" | "xlsx") =>
     `/api/websites/${id}/crawl-jobs/${jobId}/tenders/export?format=${format}`,
+  getCrawlJobCompanyProfile: (id: string, jobId: string) =>
+    request<{ profiles: CompanyProfilePage[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/company-profile`),
 };

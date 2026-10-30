@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 
 import { Button, EmptyState, PageBody, PageHeader, Panel, StatusChip, type Tone } from "@/components/ui";
 import {
-  websitesApi, type Website, type WebsiteCrawlJob, type WebsiteDocument, type WebsitePage, type WebsiteTender,
+  websitesApi,
+  type CompanyProfilePage, type Website, type WebsiteCrawlJob, type WebsiteDocument, type WebsitePage, type WebsiteTender,
 } from "@/lib/api-websites";
 import { when } from "@/lib/format";
 
@@ -99,8 +100,10 @@ export default function WebsiteDetailPage() {
   const [pages, setPages] = useState<WebsitePage[] | null>(null);
   const [documents, setDocuments] = useState<WebsiteDocument[] | null>(null);
   const [tenders, setTenders] = useState<WebsiteTender[] | null>(null);
-  const [tab, setTab] = useState<"tenders" | "pages" | "documents">("tenders");
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfilePage[] | null>(null);
+  const [tab, setTab] = useState<"tenders" | "pages" | "documents" | "company">("tenders");
   const [error, setError] = useState<string | null>(null);
+  const isCompanySite = website?.category === "company_website";
 
   function loadWebsite() {
     websitesApi.get(id).then(setWebsite).catch((err: Error) => setError(err.message));
@@ -114,9 +117,11 @@ export default function WebsiteDetailPage() {
 
   function openJob(jobId: string) {
     setSelectedJobId(jobId);
+    setTab(isCompanySite ? "company" : "tenders");
     websitesApi.listCrawlJobPages(id, jobId).then((r) => setPages(r.pages)).catch((err: Error) => setError(err.message));
     websitesApi.listCrawlJobDocuments(id, jobId).then((r) => setDocuments(r.documents)).catch((err: Error) => setError(err.message));
     websitesApi.listCrawlJobTenders(id, jobId).then((r) => setTenders(r.tenders)).catch((err: Error) => setError(err.message));
+    websitesApi.getCrawlJobCompanyProfile(id, jobId).then((r) => setCompanyProfile(r.profiles)).catch((err: Error) => setError(err.message));
   }
 
   function createJob() {
@@ -179,14 +184,50 @@ export default function WebsiteDetailPage() {
           <div className="mt-4">
             <Panel title={`Crawl ${selectedJobId}`}>
               <div className="flex gap-1 border-b border-muted px-4 pt-2">
-                {(["tenders", "pages", "documents"] as const).map((t) => (
+                {(isCompanySite ? (["company", "pages", "documents"] as const) : (["tenders", "pages", "documents"] as const)).map((t) => (
                   <button key={t} type="button" onClick={() => setTab(t)}
                           className={`rounded-t-lg px-3 py-1.5 text-label-sm capitalize ${tab === t ? "border-b-2 border-primary text-primary" : "text-tertiary"}`}>
-                    {t} ({t === "tenders" ? tenders?.length ?? 0 : t === "pages" ? pages?.length ?? 0 : documents?.length ?? 0})
+                    {t} ({t === "tenders" ? tenders?.length ?? 0 : t === "company" ? companyProfile?.length ?? 0 : t === "pages" ? pages?.length ?? 0 : documents?.length ?? 0})
                   </button>
                 ))}
               </div>
               <div className="p-4">
+                {tab === "company" ? (
+                  companyProfile && companyProfile.length === 0 ? (
+                    <EmptyState title="No company facts extracted">
+                      No company-related fields were found in the crawled pages.
+                    </EmptyState>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {(companyProfile ?? []).map((p) => {
+                        const entries = Object.entries(p.fields).filter(([, f]) => f.value !== null);
+                        return (
+                          <Panel key={p.id} bodyClassName="p-4">
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="text-label-md text-primary break-all">{p.source_url}</h4>
+                              <a href={p.source_url} target="_blank" rel="noreferrer" className="shrink-0 text-tertiary hover:text-primary">
+                                <ExternalLink size={14} strokeWidth={1.75} />
+                              </a>
+                            </div>
+                            <dl className="mt-3 grid grid-cols-1 gap-2">
+                              {entries.length === 0 ? (
+                                <p className="text-body-sm text-tertiary">Not found in source</p>
+                              ) : entries.map(([name, f]) => (
+                                <div key={name}>
+                                  <dt className="text-caption uppercase tracking-wide text-quaternary">{name.replace(/_/g, " ")}</dt>
+                                  <dd className="mt-0.5 text-body-sm text-primary">
+                                    {Array.isArray(f.value) ? f.value.join(", ") : String(f.value)}
+                                  </dd>
+                                  {f.excerpt ? <dd className="mt-0.5 text-body-sm text-quaternary italic">&ldquo;{f.excerpt}&rdquo;</dd> : null}
+                                </div>
+                              ))}
+                            </dl>
+                          </Panel>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : null}
                 {tab === "tenders" ? (
                   tenders && tenders.length === 0 ? (
                     <EmptyState title="No tenders extracted">
