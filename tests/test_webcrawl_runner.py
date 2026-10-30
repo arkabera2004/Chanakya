@@ -1,0 +1,102 @@
+"""The crawl-job runner: executes crawl_website against a real Website/WebsiteCrawlJob pair,
+persists WebsitePage rows, and updates the job's counters/status. All HTTP is mocked.
+"""
+
+from __future__ import annotations
+
+import httpx
+
+from chanakya.db import Website, WebsiteCrawlJob, WebsitePage, init_db, make_engine, session_factory
+from chanakya.webcrawl.runner import run_crawl_job
+
+BASE = "https://example.gov.in/"
+
+
+def _client_factory(handler):
+    return lambda: httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+
+def _ok_html(text: str = "<html></html>") -> httpx.Response:
+    return httpx.Response(200, text=text, headers={"content-type": "text/html"})
+
+
+def _setup(settings):
+    engine = make_engine(settings.app.database_url)
+    init_db(engine)
+    sf = session_factory(engine)
+    with sf() as session:
+        session.add(Website(id="web_1", name="X", base_url=BASE, category="other"))
+        session.add(WebsiteCrawlJob(id="wcj_1", website_id="web_1", status="queued"))
+        session.commit()
+    return sf
+
+
+def test_run_crawl_job_persists_pages_and_marks_succeeded(settings):
+    sf = _setup(settings)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return _ok_html('<a href="/tenders/1">t</a>')
+        return _ok_html()
+
+    run_crawl_job("web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False)
+
+    with sf() as session:
+        job = session.get(WebsiteCrawlJob, "wcj_1")
+        assert job.status == "succeeded"
+        assert job.started_at is not None
+        assert job.finished_at is not None
+        assert job.pages_discovered == 2
+        assert job.pages_processed == 2
+        assert job.pages_failed == 0
+
+        website = session.get(Website, "web_1")
+        assert website.last_crawl_status == "succeeded"
+        assert website.last_crawl_at is not None
+
+        pages = session.query(WebsitePage).filter_by(crawl_job_id="wcj_1").all()
+        assert {p.url for p in pages} == {BASE, "https://example.gov.in/tenders/1"}
+
+
+def test_run_crawl_job_marks_partial_when_some_pages_fail(settings):
+    sf = _setup(settings)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return _ok_html('<a href="/broken">b</a>')
+        if path == "/broken":
+            return httpx.Response(500)
+        return _ok_html()
+
+    run_crawl_job("web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False)
+
+    with sf() as session:
+        job = session.get(WebsiteCrawlJob, "wcj_1")
+        assert job.status == "partial"
+        assert job.pages_failed == 1
+        assert job.pages_processed == 1
+
+
+def test_run_crawl_job_stops_when_cancel_requested(settings):
+    sf = _setup(settings)
+    with sf() as session:
+        session.get(WebsiteCrawlJob, "wcj_1").cancel_requested = True
+        session.commit()
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        return _ok_html('<a href="/a">a</a><a href="/b">b</a>')
+
+    run_crawl_job("web_1", "wcj_1", sf, client_factory=_client_factory(handler), resolve_dns=False)
+
+    with sf() as session:
+        job = session.get(WebsiteCrawlJob, "wcj_1")
+        assert job.status == "cancelled"
