@@ -30,6 +30,19 @@ export type WebsiteCrawlJob = {
   pause_requested: boolean;
 };
 
+export type ExtractedField = {
+  value: string | number | null;
+  excerpt: string | null;
+  method: string;
+};
+
+export type WebsiteTender = {
+  id: string;
+  source_url: string;
+  fields: Record<string, ExtractedField>;
+  created_at: string | null;
+};
+
 export type CreateWebsiteInput = {
   name: string;
   base_url: string;
@@ -100,4 +113,6 @@ export const websitesApi = {
     request<{ pages: WebsitePage[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/pages`),
   listCrawlJobDocuments: (id: string, jobId: string) =>
     request<{ documents: WebsiteDocument[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/documents`),
+  listCrawlJobTenders: (id: string, jobId: string) =>
+    request<{ tenders: WebsiteTender[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/tenders`),
 };
