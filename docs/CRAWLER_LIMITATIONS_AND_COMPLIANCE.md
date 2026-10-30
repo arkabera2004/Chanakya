@@ -36,6 +36,27 @@ layer; this document covers the newer `chanakya.webcrawl` generic crawler specif
 - **Cancellation** — a `WebsiteCrawlJob.cancel_requested` flag is checked before every page is
   fetched; a cancelled crawl stops promptly and keeps whatever it had already collected.
 
+## Live verification finding (2026-10-30)
+
+A real (non-mocked) crawl against `https://nhai.gov.in/` — the brief's own named example site —
+fetched the homepage successfully (HTTP 200) but discovered **zero further pages**: direct
+inspection confirms the homepage's raw HTML (4.5 KB) contains no `<a href>` tags at all. NHAI's
+site renders its navigation client-side (a JS single-page-app shell), which this
+non-browser-rendering crawler (by design — see "Not yet done" in
+`WEBSITE_INTELLIGENCE_ARCHITECTURE.md`) cannot see past. This matches this project's own prior
+documented finding for CPPP's JS-migrated portal (`20_RISKS_AND_OPEN_QUESTIONS.md`) — it is a
+real, structural limitation of a static-HTML crawler against a JS-rendered government site, not
+a bug in this implementation. A real crawl against `https://example.com/` (a static test
+domain) succeeded identically at the HTTP level, confirming the crawl/robots/page-persistence
+pipeline itself works correctly end to end against real DNS and a real server — the zero-link
+result on NHAI is specifically about JS rendering, not about the crawler being broken.
+
+**Implication:** crawling a JS-rendered government site for real tender discovery needs a
+browser-rendering fetch (the existing Playwright/Crawlee acquisition providers already do this
+for connector-based sources) wired into `chanakya.webcrawl.crawler`'s page-fetch step, instead
+of today's plain `httpx.Client.get`. This is a real next step, not a currently-working feature
+mis-described here.
+
 ## Known gaps (honest limitations, not policy choices)
 
 - **No request-rate configuration surfaced yet.** `CrawlConfig` has no `request_delay_s` field
