@@ -240,6 +240,33 @@ Not yet started: Company Website Intelligence (Phase 9), Azure architecture + co
 (Phase 10), remaining docs and a real (non-mocked) live crawl verification against a couple of
 actual public sites (Phase 11).
 
+## Website Intelligence — Phase 9 (Company Website Intelligence)
+
+Started after the government crawler core (Phases 1–8) was working and verified, per the
+brief's explicit ordering. Reuses the same generic crawler — the only new pieces are a
+different field-extraction module and a `category`-based branch in the runner.
+
+| Date | Commit | Change | Files | Tests |
+|---|---|---|---|---|
+| 2026-10-30 | `65116de` | RED: reproduce missing company fact extraction | `tests/test_webcrawl_company_extraction.py` | 2 new, failing (expected) |
+| 2026-10-30 | `5373854` | `extract_company_fields`: label-anchored extraction (industries, tech, certifications, locations, contact) | `webcrawl/company_extraction.py` | 2 new passing |
+| 2026-10-30 | `0dddd26` | RED: reproduce missing page-title capture | `tests/test_webcrawl_crawler.py` | 1 new, failing (expected) |
+| 2026-10-30 | `0d04ee5` | Crawler captures `<title>` (company_name's evidence source) | `webcrawl/crawler.py` | 1 new passing |
+| 2026-10-30 | `731c02f` | RED: reproduce missing `WebsiteCompanyProfile` model | `tests/test_db_website_company_profile_model.py` | 1 new, failing (expected) |
+| 2026-10-30 | `28490d7` | `WebsiteCompanyProfile` model + migration | `db.py`, `migrations/versions/35c55558925d_*.py` | 1 new passing; migration-equivalence green |
+| 2026-10-30 | `af7bf1b` | RED: reproduce missing company-extraction branch in runner | `tests/test_webcrawl_runner.py` | 1 new, failing (expected) |
+| 2026-10-30 | `52d85c2` | Runner branches to company extraction when `website.category == "company_website"` (tender extraction/capability matching never run for a company site) | `webcrawl/runner.py` | 1 new passing |
+| 2026-10-30 | `0f7f18a` | RED: reproduce missing company-profile endpoint | `tests/test_desk_websites_api.py` | 1 new, failing (expected) |
+| 2026-10-30 | `8d5b5cf` | `GET .../crawl-jobs/{id}/company-profile` endpoint | `desk_websites.py` | 1 new passing; full suite green |
+| 2026-10-30 | `b0266fe` | Frontend "Company" tab (shown instead of "Tenders" for company-category websites) | `web/src/lib/api-websites.ts`, `web/src/app/websites/[id]/page.tsx` | `tsc --noEmit` clean; `next build` succeeds |
+
+Known limitation: company extraction currently runs over fetched pages only, not downloaded
+documents (tender extraction does both) — company sites rarely publish company facts as PDFs,
+so this was judged lower priority within the remaining budget; extending it is a straightforward
+repeat of the tender-document pattern if needed. Re-crawl/change-detection (brief §10) is not
+built — a second crawl job for the same website today produces an independent set of rows with
+no diffing against the previous run.
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
