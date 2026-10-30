@@ -6,6 +6,7 @@ does not implement its own allowlisting or DNS checks.
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
@@ -103,12 +104,19 @@ def extract_links(html: str, page_url: str) -> list[str]:
     return links
 
 
-def crawl_website(base_url: str, config: CrawlConfig, client: httpx.Client) -> list[DiscoveredPage]:
+def crawl_website(
+    base_url: str, config: CrawlConfig, client: httpx.Client,
+    should_stop: Callable[[], bool] | None = None,
+) -> list[DiscoveredPage]:
     """Breadth-first crawl starting at ``base_url`` plus any sitemap-seeded URLs, bounded by
     ``config.max_pages``/``config.max_depth``. Every URL is validated against the site's own
     host (plus ``config.extra_allowed_domains``) before being fetched; off-scope links are
     recorded as ``skipped_offsite`` rather than silently dropped, and robots.txt disallows are
-    recorded as ``skipped_robots`` — both visible to the crawl monitor, not hidden."""
+    recorded as ``skipped_robots`` — both visible to the crawl monitor, not hidden.
+
+    ``should_stop`` is checked before dequeuing each URL so a caller can observe a cancel/pause
+    flag mid-crawl without this module depending on any job-manager concept — it returns
+    whatever pages were collected before the stop."""
     allowed = _allowed_domains(base_url, config)
     seen: set[str] = set()
     queue: list[tuple[str, int]] = [(base_url, 0)]
@@ -119,6 +127,8 @@ def crawl_website(base_url: str, config: CrawlConfig, client: httpx.Client) -> l
 
     pages: list[DiscoveredPage] = []
     while queue and len(pages) < config.max_pages:
+        if should_stop is not None and should_stop():
+            break
         url, depth = queue.pop(0)
         if url in seen:
             continue
