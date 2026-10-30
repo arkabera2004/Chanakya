@@ -48,6 +48,32 @@ frontend). Earlier phases (baseline repair, crawling-reliability benchmark) are 
 | 2026-10-29 | `0f4f741` | Crawl4AI wired to real TenderRecord extraction | `crawl4ai_provider.py` | 1 new, real AsyncWebCrawler run |
 | 2026-10-29 | `4e9b5a3` | Firecrawl wired to real TenderRecord extraction — 9th and final provider | `firecrawl_provider.py` | 1 new, mocked HTTP |
 
+## Website Intelligence — Phase 1 (data model, CRUD API, frontend client)
+
+Design: [superpowers/specs/2026-10-30-website-intelligence-design.md](superpowers/specs/2026-10-30-website-intelligence-design.md).
+Plan: [superpowers/plans/2026-10-30-website-intelligence-phase1-data-model.md](superpowers/plans/2026-10-30-website-intelligence-phase1-data-model.md).
+Reuses the existing acquisition/pipeline/document-processing layers (see the design doc §2) —
+no new crawler, matching engine, or document parser in this phase.
+
+| Date | Commit | Change | Files | Tests |
+|---|---|---|---|---|
+| 2026-10-30 | `d1bfc6e` | Design spec + Phase 1 implementation plan | `docs/superpowers/` | — (docs only) |
+| 2026-10-30 | `aaef7cb` | RED: reproduce missing `Website`/`WebsiteCrawlJob` models | `tests/test_db_website_models.py` | 1 new, failing (expected) |
+| 2026-10-30 | `faf3db0` | `Website` and `WebsiteCrawlJob` models + Alembic migration | `db.py`, `migrations/versions/bceafae7b6e2_*.py` | 1 new passing; `test_migrations.py` baseline-equivalence green |
+| 2026-10-30 | `f24362f` | RED: reproduce missing website CRUD/crawl-job API | `tests/test_desk_websites_api.py` | 15 new, failing (expected) |
+| 2026-10-30 | `5755071` | Website CRUD + crawl-job lifecycle API (create/list/get/patch/delete, cancel/pause/resume) | `desk_websites.py`, `server.py` | 15 new passing; full suite green |
+| 2026-10-30 | `aece380` | Frontend API client (`websitesApi`) | `web/src/lib/api-websites.ts` | `tsc --noEmit` clean |
+
+Note: crawl-job lifecycle endpoints in this phase only flip `status`/`cancel_requested`/
+`pause_requested` columns — there is no executor yet. Phase 2 wires an actual crawler onto
+these jobs.
+
+Operational note: mid-phase, the development machine's disk filled to 127MB free, causing
+unrelated `test_obs.py` SQLite I/O failures (confirmed unrelated to this phase's changes by
+re-running against a clean working tree). Resolved by deleting Docker Desktop's unused 27GB VM
+disk image (`~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw`, with explicit
+user confirmation) — not a code or test defect.
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
