@@ -109,6 +109,32 @@ extracted text, download linked PDF/DOC/DOCX documents, or extract structured te
 `chanakya.documents.extract_document` already exists and is the intended reuse target for that
 work — not a new parser.
 
+## Website Intelligence — Phase 3 (document download + extraction)
+
+Reuses `chanakya.documents.extract_document` directly — no second parser. The crawler now
+discovers in-scope PDF/DOC/DOCX links on fetched pages; the runner downloads and extracts
+each one and persists it with its source page, sha256, and extracted text.
+
+| Date | Commit | Change | Files | Tests |
+|---|---|---|---|---|
+| 2026-10-30 | `16ebdfa` | RED: reproduce missing document-link discovery | `tests/test_webcrawl_crawler.py` | 1 new, failing (expected) |
+| 2026-10-30 | `e25f5a7` | Crawler discovers in-scope PDF/DOC/DOCX links per page | `webcrawl/crawler.py` | 1 new passing |
+| 2026-10-30 | `8a86aae` | RED: reproduce missing `WebsiteDocument` model | `tests/test_db_website_document_model.py` | 1 new, failing (expected) |
+| 2026-10-30 | `6b8fc0e` | `WebsiteDocument` model + migration | `db.py`, `migrations/versions/7a0a3ba2d003_*.py` | 1 new passing; migration-equivalence green |
+| 2026-10-30 | `e3f807d` | RED: reproduce missing download+extract module | `tests/test_webcrawl_documents.py` | 1 new, failing (expected) |
+| 2026-10-30 | `3c45f9f` | `download_and_extract`: fetch, save, extract via `chanakya.documents` | `webcrawl/documents.py` | 3 new passing |
+| 2026-10-30 | `beb1ebe` | RED: reproduce missing document download in the runner | `tests/test_webcrawl_runner.py` | 1 new, failing (expected) |
+| 2026-10-30 | `d4a3cfd` | Runner downloads/extracts linked documents, updates `documents_downloaded` | `webcrawl/runner.py` | 1 new passing |
+| 2026-10-30 | `8a696db` | RED: reproduce missing documents-listing endpoint | `tests/test_desk_websites_api.py` | 1 new, failing (expected) |
+| 2026-10-30 | `a200f5b` | `GET .../crawl-jobs/{id}/documents` endpoint | `desk_websites.py` | 1 new passing; full suite green |
+| 2026-10-30 | `dfb49ca` | RED: reproduce documents saved to a throwaway tempdir, not persisted | `tests/test_desk_websites_api.py` | 1 new, failing (expected) |
+| 2026-10-30 | `83413fc` | Documents now saved under `<data_dir>/website_documents/<website>/<job>` | `desk_websites.py` | 1 new passing |
+| 2026-10-30 | `828d212` | Frontend client: `listCrawlJobDocuments` | `web/src/lib/api-websites.ts` | `tsc --noEmit` clean |
+
+Not yet done (Phase 4+): extracted text (from pages and documents) is stored, but no structured
+tender fields (title, tender ID, deadline, EMD, etc.) are parsed out of it yet, and nothing is
+matched against the Wayam capability book.
+
 ## RESOLVED: the `test_followup_alerts.py` intermittent failure (was "known defect, not fixed")
 
 **Root cause, confirmed by direct reproduction, not guessed:** `tests/conftest.py::ist()` called
