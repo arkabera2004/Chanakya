@@ -20,7 +20,10 @@ from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel
 
 from . import server
-from .db import Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, init_db, make_engine, session_factory
+from .db import (
+    Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender,
+    init_db, make_engine, session_factory,
+)
 from .timeutil import now_utc
 from .webcrawl.runner import run_crawl_job
 
@@ -298,6 +301,26 @@ def list_crawl_job_documents(website_id: str, job_id: str) -> dict[str, Any]:
                 "created_at": d.created_at.isoformat() if d.created_at else None,
             }
             for d in rows
+        ]}
+
+
+@router.get("/api/websites/{website_id}/crawl-jobs/{job_id}/tenders")
+def list_crawl_job_tenders(website_id: str, job_id: str) -> dict[str, Any]:
+    sf = _session_factory()
+    with sf() as session:
+        _get_crawl_job(session, website_id, job_id)
+        rows = (
+            session.query(WebsiteTender)
+            .filter_by(crawl_job_id=job_id)
+            .order_by(WebsiteTender.created_at)
+            .all()
+        )
+        return {"tenders": [
+            {
+                "id": t.id, "source_url": t.source_url, "fields": t.fields,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in rows
         ]}
 
 
