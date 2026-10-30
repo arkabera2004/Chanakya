@@ -265,3 +265,30 @@ def test_start_crawl_persists_documents_under_data_dir(desk, settings, monkeypat
         local_path = docs[0]["local_path"]
         expected_dir = str(settings.app.data_dir / "website_documents" / wid / job_id)
         assert local_path.startswith(expected_dir)
+
+
+def test_start_crawl_extracts_tenders_and_lists_them(desk, monkeypatch):
+    import httpx
+
+    from chanakya import desk_websites
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        return httpx.Response(200, text="<html><body><p>Tender No: NHAI/2026/1</p></body></html>",
+                               headers={"content-type": "text/html"})
+
+    monkeypatch.setattr(desk_websites, "_client_factory",
+                         lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(desk_websites, "_resolve_dns", False)
+
+    with TestClient(create_app()) as client:
+        wid = _create_website(client, base_url="https://example.gov.in/")["id"]
+        job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
+        body = client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/start").json()
+        assert body["tenders_extracted"] == 1
+
+        tenders = client.get(f"/api/websites/{wid}/crawl-jobs/{job_id}/tenders").json()["tenders"]
+        assert len(tenders) == 1
+        assert tenders[0]["source_url"] == "https://example.gov.in/"
+        assert tenders[0]["fields"]["tender_id"]["value"] == "NHAI/2026/1"
