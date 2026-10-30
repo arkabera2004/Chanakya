@@ -188,3 +188,25 @@ def test_crawl_stops_early_when_should_stop_returns_true():
     config = CrawlConfig(max_pages=10, max_depth=2, resolve_dns=False)
     pages = crawl_website(BASE, config, client, should_stop=should_stop)
     assert len(pages) == 1
+
+
+def test_crawl_collects_document_links_from_fetched_pages():
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path == "/robots.txt":
+            return httpx.Response(404)
+        if path == "/sitemap.xml":
+            return httpx.Response(404)
+        if path == "/":
+            return httpx.Response(200, text=(
+                '<a href="/notice.pdf">Notice PDF</a>'
+                '<a href="/form.docx">Form</a>'
+                '<a href="https://evil.example.com/malware.pdf">offsite doc</a>'
+            ), headers={"content-type": "text/html"})
+        return httpx.Response(404)
+
+    client = _client(handler)
+    config = CrawlConfig(max_pages=10, max_depth=1, resolve_dns=False)
+    pages = crawl_website(BASE, config, client)
+    home = next(p for p in pages if p.url == BASE)
+    assert home.document_links == ["https://example.gov.in/notice.pdf", "https://example.gov.in/form.docx"]
