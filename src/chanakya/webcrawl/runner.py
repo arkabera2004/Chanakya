@@ -14,13 +14,16 @@ from pathlib import Path
 import httpx
 
 from ..config import DocumentSettings, FilteringSettings
-from ..db import Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender
+from ..db import Website, WebsiteCompanyProfile, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender
 from ..pipeline.knowledge import KnowledgeBase
 from ..timeutil import now_utc
 from .capability_matching import build_tender_record, match_capabilities
+from .company_extraction import extract_company_fields
 from .crawler import CrawlConfig, DiscoveredPage, crawl_website
 from .documents import download_and_extract
 from .tender_extraction import extract_tender_fields
+
+COMPANY_CATEGORY = "company_website"
 
 _FAILED_STATUSES = {"failed"}
 
@@ -35,6 +38,17 @@ def _new_document_id() -> str:
 
 def _new_tender_id() -> str:
     return f"wtd_{uuid.uuid4().hex[:16]}"
+
+
+def _new_company_profile_id() -> str:
+    return f"wcp_{uuid.uuid4().hex[:16]}"
+
+
+def _company_fields_json(text: str, title: str | None) -> dict | None:
+    fields = extract_company_fields(text, page_title=title)
+    if not any(f.value is not None for f in fields.values()):
+        return None
+    return {name: {"value": f.value, "excerpt": f.excerpt, "method": f.method} for name, f in fields.items()}
 
 
 def _tender_fields_json(text: str) -> dict | None:
@@ -76,6 +90,7 @@ def run_crawl_job(
         job.started_at = now_utc()
         session.commit()
         base_url = website.base_url
+        category = website.category
         crawl_config = dict(website.crawl_config or {})
 
     def should_stop() -> bool:
@@ -138,36 +153,48 @@ def run_crawl_job(
             ))
 
         tenders_extracted = 0
-        for page in pages:
-            if page.status != "fetched" or not page.text:
-                continue
-            tender_fields = _tender_fields_json(page.text)
-            if tender_fields is None:
-                continue
-            matches = (
-                _capability_matches(page.url, tender_fields, page.text, knowledge_base, filtering_settings)
-                if knowledge_base is not None and filtering_settings is not None else []
-            )
-            session.add(WebsiteTender(
-                id=_new_tender_id(), website_id=website_id, crawl_job_id=job_id,
-                source_url=page.url, fields=tender_fields, matches=matches, created_at=now_utc(),
-            ))
-            tenders_extracted += 1
-        for _source_page_url, doc_url, result in documents:
-            if result.status != "extracted" or not result.extracted_text:
-                continue
-            tender_fields = _tender_fields_json(result.extracted_text)
-            if tender_fields is None:
-                continue
-            matches = (
-                _capability_matches(doc_url, tender_fields, result.extracted_text, knowledge_base, filtering_settings)
-                if knowledge_base is not None and filtering_settings is not None else []
-            )
-            session.add(WebsiteTender(
-                id=_new_tender_id(), website_id=website_id, crawl_job_id=job_id,
-                source_url=doc_url, fields=tender_fields, matches=matches, created_at=now_utc(),
-            ))
-            tenders_extracted += 1
+        if category == COMPANY_CATEGORY:
+            for page in pages:
+                if page.status != "fetched" or not page.text:
+                    continue
+                company_fields = _company_fields_json(page.text, page.title)
+                if company_fields is None:
+                    continue
+                session.add(WebsiteCompanyProfile(
+                    id=_new_company_profile_id(), website_id=website_id, crawl_job_id=job_id,
+                    source_url=page.url, fields=company_fields, created_at=now_utc(),
+                ))
+        else:
+            for page in pages:
+                if page.status != "fetched" or not page.text:
+                    continue
+                tender_fields = _tender_fields_json(page.text)
+                if tender_fields is None:
+                    continue
+                matches = (
+                    _capability_matches(page.url, tender_fields, page.text, knowledge_base, filtering_settings)
+                    if knowledge_base is not None and filtering_settings is not None else []
+                )
+                session.add(WebsiteTender(
+                    id=_new_tender_id(), website_id=website_id, crawl_job_id=job_id,
+                    source_url=page.url, fields=tender_fields, matches=matches, created_at=now_utc(),
+                ))
+                tenders_extracted += 1
+            for _source_page_url, doc_url, result in documents:
+                if result.status != "extracted" or not result.extracted_text:
+                    continue
+                tender_fields = _tender_fields_json(result.extracted_text)
+                if tender_fields is None:
+                    continue
+                matches = (
+                    _capability_matches(doc_url, tender_fields, result.extracted_text, knowledge_base, filtering_settings)
+                    if knowledge_base is not None and filtering_settings is not None else []
+                )
+                session.add(WebsiteTender(
+                    id=_new_tender_id(), website_id=website_id, crawl_job_id=job_id,
+                    source_url=doc_url, fields=tender_fields, matches=matches, created_at=now_utc(),
+                ))
+                tenders_extracted += 1
 
         job.pages_discovered = len(pages)
         job.pages_processed = sum(1 for p in pages if p.status == "fetched")
