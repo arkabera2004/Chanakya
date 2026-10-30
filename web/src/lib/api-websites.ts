@@ -52,6 +52,19 @@ export type WebsitePage = {
   discovered_at: string | null;
 };
 
+export type WebsiteDocument = {
+  id: string;
+  source_page_url: string;
+  document_url: string;
+  local_path: string | null;
+  sha256: string | null;
+  content_type: string | null;
+  status: string;
+  extraction_error: string | null;
+  extracted_text: string | null;
+  created_at: string | null;
+};
+
 export const websitesApi = {
   list: () => request<{ websites: Website[] }>("/api/websites"),
   create: (body: CreateWebsiteInput) =>
@@ -85,4 +98,6 @@ export const websitesApi = {
     request<WebsiteCrawlJob>(`/api/websites/${id}/crawl-jobs/${jobId}/start`, { method: "POST" }),
   listCrawlJobPages: (id: string, jobId: string) =>
     request<{ pages: WebsitePage[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/pages`),
+  listCrawlJobDocuments: (id: string, jobId: string) =>
+    request<{ documents: WebsiteDocument[] }>(`/api/websites/${id}/crawl-jobs/${jobId}/documents`),
 };
