@@ -14,14 +14,21 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel
 
 from . import server
-from .db import Website, WebsiteCrawlJob, init_db, make_engine, session_factory
+from .db import Website, WebsiteCrawlJob, WebsitePage, init_db, make_engine, session_factory
 from .timeutil import now_utc
+from .webcrawl.runner import run_crawl_job
 
 router = APIRouter()
+
+# Overridable by tests (monkeypatch.setattr) so /start runs against mocked HTTP, never the
+# real network, in automated tests.
+_client_factory = httpx.Client
+_resolve_dns = True
 
 VALID_CATEGORIES = {
     "government_procurement", "government_department", "nhai", "gepnic",
@@ -225,6 +232,44 @@ def pause_crawl_job(website_id: str, job_id: str) -> dict[str, Any]:
         job.status = "paused"
         session.commit()
         return _crawl_job_dict(job)
+
+
+@router.post("/api/websites/{website_id}/crawl-jobs/{job_id}/start")
+def start_crawl_job(website_id: str, job_id: str) -> dict[str, Any]:
+    """Runs the crawl synchronously within the request.
+
+    shortcut: a crawl bounded by the website's own page-limit config runs to completion (or a
+    cancel/pause flag) before this call returns; a very large crawl would hold the request open
+    for a long time. Upgrade to a background executor (as acquisition/job_manager.py already
+    does for provider jobs) if/when crawl sizes outgrow a single request's timeout budget.
+    """
+    sf = _session_factory()
+    with sf() as session:
+        job = _get_crawl_job(session, website_id, job_id)
+        if job.status != "queued":
+            raise HTTPException(409, "crawl job must be queued to start")
+
+    run_crawl_job(website_id, job_id, sf, client_factory=_client_factory, resolve_dns=_resolve_dns)
+
+    with sf() as session:
+        job = session.get(WebsiteCrawlJob, job_id)
+        return _crawl_job_dict(job)
+
+
+@router.get("/api/websites/{website_id}/crawl-jobs/{job_id}/pages")
+def list_crawl_job_pages(website_id: str, job_id: str) -> dict[str, Any]:
+    sf = _session_factory()
+    with sf() as session:
+        _get_crawl_job(session, website_id, job_id)
+        rows = session.query(WebsitePage).filter_by(crawl_job_id=job_id).order_by(WebsitePage.discovered_at).all()
+        return {"pages": [
+            {
+                "id": p.id, "url": p.url, "depth": p.depth, "status": p.status,
+                "http_status": p.http_status, "content_type": p.content_type, "error": p.error,
+                "discovered_at": p.discovered_at.isoformat() if p.discovered_at else None,
+            }
+            for p in rows
+        ]}
 
 
 @router.post("/api/websites/{website_id}/crawl-jobs/{job_id}/resume")
