@@ -12,6 +12,7 @@ Auth: server.create_app() applies server.require_desk_auth to every route app-wi
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -249,7 +250,12 @@ def start_crawl_job(website_id: str, job_id: str) -> dict[str, Any]:
         if job.status != "queued":
             raise HTTPException(409, "crawl job must be queued to start")
 
-    run_crawl_job(website_id, job_id, sf, client_factory=_client_factory, resolve_dns=_resolve_dns)
+    settings = server.desk_settings()
+    documents_dir = Path(settings.app.data_dir) / "website_documents" / website_id / job_id
+    run_crawl_job(
+        website_id, job_id, sf, client_factory=_client_factory, resolve_dns=_resolve_dns,
+        documents_dir=documents_dir,
+    )
 
     with sf() as session:
         job = session.get(WebsiteCrawlJob, job_id)
