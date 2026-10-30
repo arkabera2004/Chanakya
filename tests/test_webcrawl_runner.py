@@ -246,3 +246,42 @@ def test_run_crawl_job_skips_matching_when_no_knowledge_base_given(settings):
     with sf() as session:
         tender = session.query(WebsiteTender).filter_by(crawl_job_id="wcj_1").one()
         assert tender.matches == []
+
+
+def test_run_crawl_job_extracts_company_profile_for_company_website(settings):
+    from chanakya.db import WebsiteCompanyProfile
+
+    engine = make_engine(settings.app.database_url)
+    init_db(engine)
+    sf = session_factory(engine)
+    with sf() as session:
+        session.add(Website(id="web_co", name="Acme", base_url="https://acme.example/", category="company_website"))
+        session.add(WebsiteCrawlJob(id="wcj_co", website_id="web_co", status="queued"))
+        session.commit()
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        if path == "/":
+            return httpx.Response(
+                200,
+                text="<html><head><title>Acme Robotics</title></head><body>"
+                     "<p>Industries: Smart Cities, Industrial Safety</p></body></html>",
+                headers={"content-type": "text/html"},
+            )
+        return _ok_html()
+
+    run_crawl_job("web_co", "wcj_co", sf, client_factory=_client_factory(handler), resolve_dns=False)
+
+    with sf() as session:
+        job = session.get(WebsiteCrawlJob, "wcj_co")
+        assert job.status == "succeeded"
+        profiles = session.query(WebsiteCompanyProfile).filter_by(crawl_job_id="wcj_co").all()
+        assert len(profiles) == 1
+        assert profiles[0].fields["company_name"]["value"] == "Acme Robotics"
+        assert profiles[0].fields["industries"]["value"] == ["Smart Cities", "Industrial Safety"]
+
+        # Government-tender extraction and capability matching never run for a company site.
+        tenders = session.query(WebsiteTender).filter_by(crawl_job_id="wcj_co").all()
+        assert tenders == []
