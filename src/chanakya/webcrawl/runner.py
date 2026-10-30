@@ -14,10 +14,11 @@ from pathlib import Path
 import httpx
 
 from ..config import DocumentSettings
-from ..db import Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage
+from ..db import Website, WebsiteCrawlJob, WebsiteDocument, WebsitePage, WebsiteTender
 from ..timeutil import now_utc
 from .crawler import CrawlConfig, DiscoveredPage, crawl_website
 from .documents import download_and_extract
+from .tender_extraction import extract_tender_fields
 
 _FAILED_STATUSES = {"failed"}
 
@@ -28,6 +29,22 @@ def _new_page_id() -> str:
 
 def _new_document_id() -> str:
     return f"wdoc_{uuid.uuid4().hex[:16]}"
+
+
+def _new_tender_id() -> str:
+    return f"wtd_{uuid.uuid4().hex[:16]}"
+
+
+def _tender_fields_json(text: str) -> dict | None:
+    """Returns the field dict only when at least one field was actually found — a page or
+    document with nothing tender-related in it gets no WebsiteTender row at all, rather than
+    one full of "not found" noise."""
+    fields = extract_tender_fields(text)
+    # opportunity_type always resolves to something non-None for non-empty text (it falls back
+    # to "tender"), so it alone must not count as "found" — only fields with real evidence do.
+    if not any(f.excerpt is not None for f in fields.values()):
+        return None
+    return {name: {"value": f.value, "excerpt": f.excerpt, "method": f.method} for name, f in fields.items()}
 
 
 def run_crawl_job(
@@ -107,10 +124,35 @@ def run_crawl_job(
                 extraction_error=result.error, extracted_text=result.extracted_text, created_at=now_utc(),
             ))
 
+        tenders_extracted = 0
+        for page in pages:
+            if page.status != "fetched" or not page.text:
+                continue
+            tender_fields = _tender_fields_json(page.text)
+            if tender_fields is None:
+                continue
+            session.add(WebsiteTender(
+                id=_new_tender_id(), website_id=website_id, crawl_job_id=job_id,
+                source_url=page.url, fields=tender_fields, created_at=now_utc(),
+            ))
+            tenders_extracted += 1
+        for _source_page_url, doc_url, result in documents:
+            if result.status != "extracted" or not result.extracted_text:
+                continue
+            tender_fields = _tender_fields_json(result.extracted_text)
+            if tender_fields is None:
+                continue
+            session.add(WebsiteTender(
+                id=_new_tender_id(), website_id=website_id, crawl_job_id=job_id,
+                source_url=doc_url, fields=tender_fields, created_at=now_utc(),
+            ))
+            tenders_extracted += 1
+
         job.pages_discovered = len(pages)
         job.pages_processed = sum(1 for p in pages if p.status == "fetched")
         job.pages_failed = failed
         job.documents_downloaded = len(documents)
+        job.tenders_extracted = tenders_extracted
         job.finished_at = now_utc()
         job.status = "cancelled" if was_cancelled else ("partial" if failed else "succeeded")
 
