@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, BadgeCheck, Boxes, Coins, FlaskConical, Menu, Moon, Plug, Radar, Radio, Server, SunMedium, Telescope, type LucideIcon } from "lucide-react";
+import { Activity, BadgeCheck, Boxes, Coins, FlaskConical, Globe, Menu, Moon, Plug, Radar, Radio, Server, SunMedium, Telescope, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -17,6 +17,7 @@ const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/products", label: "Products", icon: Boxes },
   { href: "/runs", label: "Passes", icon: Activity },
   { href: "/sources", label: "Sources", icon: Server },
+  { href: "/websites", label: "Website Intelligence", icon: Globe },
   { href: "/providers", label: "Providers", icon: Plug },
   { href: "/costs", label: "Costs", icon: Coins },
   { href: "/profile", label: "Profile", icon: BadgeCheck },
