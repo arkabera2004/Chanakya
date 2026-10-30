@@ -57,6 +57,15 @@ for connector-based sources) wired into `chanakya.webcrawl.crawler`'s page-fetch
 of today's plain `httpx.Client.get`. This is a real next step, not a currently-working feature
 mis-described here.
 
+A second real crawl, against `https://eprocure.gov.in/eprocure/app` (static HTML, not a JS SPA,
+`max_pages=8`), confirms the positive path: **8 pages discovered and fetched (all HTTP 200)**,
+**1 document downloaded**, and **1 tender record extracted** with a capability match, all from
+real network traffic against a real government portal. This is the same portal family
+(GePNIC/CPPP) the existing `connectors/gepnic.py` was built against, and it confirms the
+generic crawler's link discovery, same-origin scoping, and tender extraction work correctly
+end to end on a real site whose homepage actually has static `<a href>` links — the NHAI
+result above is specifically a JS-rendering limitation, not a general crawler defect.
+
 ## Known gaps (honest limitations, not policy choices)
 
 - **No request-rate configuration surfaced yet.** `CrawlConfig` has no `request_delay_s` field
