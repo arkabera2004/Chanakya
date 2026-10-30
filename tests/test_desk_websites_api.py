@@ -162,3 +162,40 @@ def test_resume_non_paused_job_is_409(desk):
         wid = _create_website(client)["id"]
         job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
         assert client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/resume").status_code == 409
+
+
+def test_start_queued_crawl_job_runs_it_to_completion(desk, monkeypatch):
+    import httpx
+
+    from chanakya import desk_websites
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        return httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+
+    monkeypatch.setattr(desk_websites, "_client_factory",
+                         lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(desk_websites, "_resolve_dns", False)
+
+    with TestClient(create_app()) as client:
+        wid = _create_website(client, base_url="https://example.gov.in/")["id"]
+        job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
+
+        r = client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/start")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "succeeded"
+        assert body["pages_processed"] == 1
+
+        pages = client.get(f"/api/websites/{wid}/crawl-jobs/{job_id}/pages").json()["pages"]
+        assert len(pages) == 1
+        assert pages[0]["url"] == "https://example.gov.in/"
+
+
+def test_start_non_queued_crawl_job_is_409(desk):
+    with TestClient(create_app()) as client:
+        wid = _create_website(client)["id"]
+        job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
+        client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/cancel")
+        assert client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/start").status_code == 409
