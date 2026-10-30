@@ -382,3 +382,33 @@ def test_export_tenders_rejects_unknown_format(desk):
         job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
         r = client.get(f"/api/websites/{wid}/crawl-jobs/{job_id}/tenders/export?format=pdf")
         assert r.status_code == 400
+
+
+def test_company_website_crawl_produces_company_profile(desk, monkeypatch):
+    import httpx
+
+    from chanakya import desk_websites
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path in ("/robots.txt", "/sitemap.xml"):
+            return httpx.Response(404)
+        return httpx.Response(
+            200,
+            text="<html><head><title>Acme Robotics</title></head><body>"
+                 "<p>Industries: Smart Cities, Industrial Safety</p></body></html>",
+            headers={"content-type": "text/html"},
+        )
+
+    monkeypatch.setattr(desk_websites, "_client_factory",
+                         lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(desk_websites, "_resolve_dns", False)
+
+    with TestClient(create_app()) as client:
+        wid = _create_website(client, base_url="https://acme.example/", category="company_website")["id"]
+        job_id = client.post(f"/api/websites/{wid}/crawl-jobs").json()["id"]
+        client.post(f"/api/websites/{wid}/crawl-jobs/{job_id}/start")
+
+        profiles = client.get(f"/api/websites/{wid}/crawl-jobs/{job_id}/company-profile").json()["profiles"]
+        assert len(profiles) == 1
+        assert profiles[0]["fields"]["company_name"]["value"] == "Acme Robotics"
+        assert profiles[0]["source_url"] == "https://acme.example/"
