@@ -17,6 +17,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, Body, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from . import server
@@ -26,6 +27,7 @@ from .db import (
 )
 from .pipeline.knowledge import load_knowledge_base
 from .timeutil import now_utc
+from .webcrawl.export import export_csv, export_xlsx
 from .webcrawl.runner import run_crawl_job
 
 router = APIRouter()
@@ -324,6 +326,30 @@ def list_crawl_job_tenders(website_id: str, job_id: str) -> dict[str, Any]:
             }
             for t in rows
         ]}
+
+
+@router.get("/api/websites/{website_id}/crawl-jobs/{job_id}/tenders/export")
+def export_crawl_job_tenders(website_id: str, job_id: str, format: str = "csv") -> Response:  # noqa: A002
+    if format not in ("csv", "xlsx"):
+        raise HTTPException(400, f"unknown export format '{format}', expected 'csv' or 'xlsx'")
+    sf = _session_factory()
+    with sf() as session:
+        _get_crawl_job(session, website_id, job_id)
+        rows = (
+            session.query(WebsiteTender)
+            .filter_by(crawl_job_id=job_id)
+            .order_by(WebsiteTender.created_at)
+            .all()
+        )
+        tenders = [{"source_url": t.source_url, "fields": t.fields, "matches": t.matches} for t in rows]
+
+    if format == "csv":
+        return Response(export_csv(tenders), media_type="text/csv",
+                         headers={"Content-Disposition": f'attachment; filename="{job_id}_tenders.csv"'})
+    return Response(
+        export_xlsx(tenders), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{job_id}_tenders.xlsx"'},
+    )
 
 
 @router.post("/api/websites/{website_id}/crawl-jobs/{job_id}/resume")
